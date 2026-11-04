@@ -1,0 +1,90 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "acados_solver",
+    srcs = glob(
+        [
+            "c_generated_code/*.c",
+            "c_generated_code/*_model/*.c",
+        ],
+        exclude = ["c_generated_code/main*.c"],
+    ),
+    hdrs = glob([
+        "c_generated_code/*.h",
+        "c_generated_code/*_model/*.h",
+    ]),
+    includes = [
+        "c_generated_code",
+    ],
+    copts = [
+        "-O3",
+        "-fPIC",
+        "-std=c99",
+    ],
+    deps = [
+        "//third_party/acados:acados",
+    ],
+)
+
+# Native headless simulation benchmark executable
+cc_binary(
+    name = "mpc_sim",
+    srcs = [
+        "src/main_mpc.cpp",
+        "src/acados_mpc_wrapper.hpp",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkopts = [
+        "-Wl,-rpath,/home/manuel/.local/lib/python3.10/site-packages/mujoco",
+        "-Wl,-rpath,/home/manuel/software/acados/lib",
+        "-pthread",
+    ],
+    deps = [
+        ":acados_solver",
+        "//third_party/mujoco:mujoco",
+    ],
+    data = [
+        "CAD/scene.xml",
+        "CAD/robot.xml",
+        "CAD/assets",
+    ],
+)
+
+# C++ NMPC shared library for interactive GUI integration
+cc_binary(
+    name = "libbalancer_mpc.so",
+    srcs = [
+        "src/c_interface.cpp",
+        "src/acados_mpc_wrapper.hpp",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-fPIC",
+    ],
+    linkshared = True,
+    linkopts = [
+        "-Wl,-rpath,/home/manuel/software/acados/lib",
+    ],
+    deps = [
+        ":acados_solver",
+    ],
+)
+
+# Interactive GUI simulation target
+cc_binary(
+    name = "sim_gui",
+    srcs = ["src/main_gui.cpp"],
+    data = [
+        ":libbalancer_mpc.so",
+        "run_interactive_sim.py",
+        "CAD/scene.xml",
+        "CAD/robot.xml",
+        "CAD/assets",
+    ],
+)

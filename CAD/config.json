@@ -1,0 +1,8 @@
+{
+  "url": "https://cad.onshape.com/documents/3f8f64596c750ad739a3ccc2/w/9b1f2c2be98d80105dc3361e/e/5e6c351f0eb2f59ff8407b92",
+  "output_format": "mujoco",
+  "output_filename": "robot",
+  "assets_directory": "assets",
+  "draw_colliders": false,
+  "simplify_stls": true
+}

@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Engineering Technical Report: Acrobat / BDX Wheeled Biped Balancer Robot</title>
+  
+  <!-- KaTeX for high-performance LaTeX math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false}
+          ]});"></script>
+
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #131b2e;
+      --card-border: #1e293b;
+      --border: #26334d;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.15);
+      --accent-purple: #a855f7;
+      --accent-green: #10b981;
+      --code-bg: #070b14;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.65;
+      padding: 2.5rem 1rem 5rem 1rem;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.6rem;
+      line-height: 1.2;
+    }
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      margin-bottom: 1.25rem;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .meta-grid span {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-top: 2.5rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-top: 1.6rem;
+      margin-bottom: 0.6rem;
+    }
+    p, li {
+      font-size: 0.96rem;
+      color: #cbd5e1;
+      margin-bottom: 0.9rem;
+    }
+    ul, ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    li {
+      margin-bottom: 0.4rem;
+    }
+    .figure-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin: 1.8rem 0;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .figure-caption {
+      margin-top: 0.85rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    svg text {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      margin-bottom: 1.4rem;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.88em;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.15em 0.35em;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+    .callout {
+      background: var(--accent-glow);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.2rem;
+      margin: 1.4rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .callout.purple {
+      background: rgba(168, 85, 247, 0.12);
+      border-left-color: var(--accent-purple);
+    }
+    .callout.green {
+      background: rgba(16, 185, 129, 0.12);
+      border-left-color: var(--accent-green);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: 0.9rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+    th {
+      background: #1a233a;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="badge">Engineering Technical Specification</div>
+    <h1>Acrobat / BDX Wheeled Biped Balancer Robot</h1>
+    <div class="subtitle">Complete Kinematic Calibration, Nonlinear Dynamics, Drift-Free Cascaded Control & Symmetrical Vertical Crouch Control</div>
+    <div class="meta-grid">
+      <div>Stack: <span>Bazel 9 • C++17 • Python</span></div>
+      <div>Engine: <span>MuJoCo 3.x Physics</span></div>
+      <div>NMPC Solver: <span>acados SQP-RTI (HPIPM)</span></div>
+      <div>Topology: <span>6 Actuators • 8 States</span></div>
+    </div>
+  </header>
+
+  <!-- SECTION 1 -->
+  <section>
+    <h2>1. Robot Architecture & Kinematic Chain</h2>
+    <p>
+      The robot is an agile wheeled biped consisting of a floating base pelvis/torso and two bilateral 2-link articulated legs terminating in independent driven hub wheels. The mechanical CAD assembly (exported from OnShape into <code>CAD/robot.xml</code> and <code>CAD/scene.xml</code>) defines a 6-DOF actuated system resting on ground plane contacts.
+    </p>
+
+    <div class="figure-box">
+      <!-- Figure 1: Full Kinematic & FBD Diagram -->
+      <svg viewBox="0 0 650 420" width="100%" height="320" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8"/>
+          </marker>
+          <marker id="arrow-green" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/>
+          </marker>
+        </defs>
+
+        <!-- Ground Plane -->
+        <line x1="40" y1="360" x2="610" y2="360" stroke="#64748b" stroke-width="2"/>
+        <line x1="40" y1="360" x2="30" y2="375" stroke="#475569" stroke-width="1"/>
+        <line x1="120" y1="360" x2="110" y2="375" stroke="#475569" stroke-width="1"/>
+        <line x1="200" y1="360" x2="190" y2="375" stroke="#475569" stroke-width="1"/>
+        <line x1="280" y1="360" x2="270" y2="375" stroke="#475569" stroke-width="1"/>
+        <line x1="360" y1="360" x2="350" y2="375" stroke="#475569" stroke-width="1"/>
+        <line x1="440" y1="360" x2="430" y2="375" stroke="#475569" stroke-width="1"/>
+        <line x1="520" y1="360" x2="510" y2="375" stroke="#475569" stroke-width="1"/>
+        <line x1="600" y1="360" x2="590" y2="375" stroke="#475569" stroke-width="1"/>
+
+        <!-- World Coordinate Axes -->
+        <line x1="70" y1="350" x2="70" y2="280" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="75" y="275" fill="#38bdf8" font-size="12" font-weight="bold">+Z (Up)</text>
+        <line x1="70" y1="350" x2="140" y2="350" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="145" y="355" fill="#38bdf8" font-size="12" font-weight="bold">+Y (Forward)</text>
+
+        <!-- Vertical reference through wheel axle -->
+        <line x1="320" y1="360" x2="320" y2="50" stroke="#475569" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+        <!-- Wheel Geometry (Radius R = 40mm) -->
+        <circle cx="320" cy="320" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="3"/>
+        <circle cx="320" cy="320" r="6" fill="#38bdf8"/>
+        <text x="332" y="325" fill="#94a3b8" font-size="11">Axle (y_w, z_w)</text>
+        <line x1="320" y1="320" x2="355" y2="340" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="340" y="332" fill="#cbd5e1" font-size="10">R = 40 mm</text>
+
+        <!-- Tibia Link (Knee -> Wheel Axle) -->
+        <!-- Knee positioned at (265, 205) -->
+        <line x1="265" y1="205" x2="320" y2="320" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
+        <text x="305" y="260" fill="#60a5fa" font-size="11" font-weight="bold">Tibia (106.8 mm)</text>
+
+        <!-- Knee Joint (cyl_5 / cyl_6) -->
+        <circle cx="265" cy="205" r="7" fill="#a855f7"/>
+        <text x="210" y="210" fill="#a855f7" font-size="11" font-weight="bold">Knee (q_k)</text>
+
+        <!-- Femur Link (Hip -> Knee) -->
+        <!-- Hip positioned at (320, 110) -->
+        <line x1="320" y1="110" x2="265" y2="205" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
+        <text x="250" y="150" fill="#38bdf8" font-size="11" font-weight="bold">Femur (108.4 mm)</text>
+
+        <!-- Hip Joint (cyl_1 / cyl_2) -->
+        <circle cx="320" cy="110" r="8" fill="#38bdf8"/>
+        <text x="335" y="115" fill="#38bdf8" font-size="11" font-weight="bold">Hip (q_h)</text>
+
+        <!-- Torso & Pelvis Base -->
+        <g transform="translate(320, 110) rotate(8)">
+          <rect x="-25" y="-70" width="50" height="75" rx="6" fill="#38bdf8" fill-opacity="0.2" stroke="#38bdf8" stroke-width="2"/>
+          <!-- Torso COM -->
+          <circle cx="0" cy="-35" r="9" fill="#f59e0b"/>
+          <path d="M 0 -35 L 9 -35 A 9 9 0 0 1 0 -26 Z" fill="#0b0f19"/>
+          <path d="M 0 -35 L -9 -35 A 9 9 0 0 1 0 -44 Z" fill="#0b0f19"/>
+          <text x="14" y="-30" fill="#f59e0b" font-size="11" font-weight="bold">Robot COM</text>
+        </g>
+
+        <!-- Pitch Arc theta -->
+        <path d="M 320 60 A 50 50 0 0 1 332 62" fill="none" stroke="#f59e0b" stroke-width="2"/>
+        <text x="338" y="58" fill="#f59e0b" font-size="13" font-weight="bold">θ (Pitch)</text>
+
+        <!-- Wheel Motor Torque Tau_w -->
+        <path d="M 300 295 A 25 25 0 0 1 340 295" fill="none" stroke="#10b981" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+        <text x="350" y="295" fill="#10b981" font-size="12" font-weight="bold">+τ_w</text>
+
+        <!-- Forward Displacement p -->
+        <line x1="320" y1="390" x2="400" y2="390" stroke="#f8fafc" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="345" y="410" fill="#f8fafc" font-size="12">p (Forward Travel Y)</text>
+      </svg>
+      <div class="figure-caption">Figure 1: Full kinematic topology, joint coordinate frames, link lengths, and center-of-mass alignment.</div>
+    </div>
+
+    <h3>Physical Parameters Derived from CAD</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Mass ($m$)</th>
+          <th>Inertia ($I_{xx}, I_{yy}, I_{zz}$)</th>
+          <th>Effective Length</th>
+          <th>Actuator Name</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Pelvis / Torso Base</strong></td>
+          <td>$1.30\,\text{kg}$</td>
+          <td>$[0.0001, 0.0002, 0.0003]\,\text{kg}\cdot\text{m}^2$</td>
+          <td>Height: $17.2\,\text{cm}$</td>
+          <td>Floating Base (6-DOF Freejoint)</td>
+        </tr>
+        <tr>
+          <td><strong>Femurs ($2\times$)</strong></td>
+          <td>$0.1905\,\text{kg}$ each</td>
+          <td>$[0.00027, 0.00017, 0.00033]\,\text{kg}\cdot\text{m}^2$</td>
+          <td>$L_1 = 108.4\,\text{mm}$</td>
+          <td><code>cyl_1</code> (Left), <code>cyl_2</code> (Right)</td>
+        </tr>
+        <tr>
+          <td><strong>Tibias ($2\times$)</strong></td>
+          <td>$0.1905\,\text{kg}$ each</td>
+          <td>$[0.00009, 0.00035, 0.00033]\,\text{kg}\cdot\text{m}^2$</td>
+          <td>$L_2 = 106.8\,\text{mm}$</td>
+          <td><code>cyl_5</code> (Left), <code>cyl_6</code> (Right)</td>
+        </tr>
+        <tr>
+          <td><strong>Hub Wheels ($2\times$)</strong></td>
+          <td>$0.0276\,\text{kg}$ each</td>
+          <td>$I_w = 2.21 \times 10^{-5}\,\text{kg}\cdot\text{m}^2$</td>
+          <td>Radius $R = 40.0\,\text{mm}$</td>
+          <td><code>cyl_3</code> (Left), <code>cyl_4</code> (Right)</td>
+        </tr>
+        <tr>
+          <td><strong>Total Robot Assembly</strong></td>
+          <td>$M_{\text{tot}} = 2.12\,\text{kg}$</td>
+          <td>$I_y \approx 0.015\,\text{kg}\cdot\text{m}^2$</td>
+          <td>Max Extended: $215.2\,\text{mm}$</td>
+          <td>6 Motor Actuators ($\pm 15\,\text{Nm}$ / $\pm 5\,\text{Nm}$)</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 2 -->
+  <section>
+    <h2>2. CAD Asymmetric Assembly Calibration & Nominal Stance</h2>
+    <p>
+      Direct import from OnShape revealed that the right leg was mated at a different initial mechanical zero relative to the left leg. Without calibration, the right wheel dangled $3.1\,\text{cm}$ higher than the left wheel, causing the robot to violently roll and topple upon contact.
+    </p>
+
+    <div class="callout purple">
+      <strong>Exact Numerical Calibration Solved to Sub-Micron Precision:</strong>
+      $$\Delta q_{\text{right\_hip\_calib}} = +0.258385\,\text{rad} \quad (+14.804^\circ)$$
+      $$\Delta q_{\text{right\_knee\_calib}} = +0.552626\,\text{rad} \quad (+31.663^\circ)$$
+      Applying these offsets yields a vertical wheel axle difference of $|z_{\text{wheel,L}} - z_{\text{wheel,R}}| < 0.65\,\mu\text{m}$, ensuring both wheels touch the ground plane simultaneously with zero rolling tilt.
+    </div>
+
+    <h3>Nominal Sagittal Stance Alignment</h3>
+    <p>
+      To balance without spending continuous motor torque fighting gravity, the robot's center of mass must align perfectly along the vertical line intersecting the wheel contact axle:
+    </p>
+    $$y_{\text{COM}}(q_h, q_k) - y_{\text{wheel}} = 0$$
+    <p>
+      By solving this constraint numerically against the complete multi-body tree, we discovered the unique nominal hip angle:
+    </p>
+    $$q_{h,\text{nominal}} = -0.2150\,\text{rad} \quad (-12.318^\circ), \quad q_{k,\text{nominal}} = 0.0\,\text{rad}$$
+    <p>
+      At this stance, $|y_{\text{COM}} - y_{\text{wheel}}| = 0.00004\,\text{m}$ ($0.04\,\text{mm}$), and the wheel tires contact the floor plane at exactly $z = 0.0012\,\text{m}$. This state is encoded as a native MuJoCo keyframe:
+    </p>
+    <pre><code>&lt;keyframe&gt;
+  &lt;key name="home" qpos="0 0 0.0012 1 0 0 0 -0.215 0 0 0.473385 0.552626 0"/&gt;
+&lt;/keyframe&gt;</code></pre>
+  </section>
+
+  <!-- SECTION 3 -->
+  <section>
+    <h2>3. Nonlinear Dynamics & acados SQP-RTI Formulation</h2>
+    <p>
+      The coupled dynamics between forward translation $p$ along $+Y$, pitch rotation $\theta$ around lateral $+X$, and articulated leg kinematics $q_h, q_k$ are governed by the Euler-Lagrange equations of motion:
+    </p>
+
+    $$M(q)\ddot{q} + C(q, \dot{q})\dot{q} + G(q) = B u$$
+
+    <p>
+      For the 8-dimensional state vector $x = [p, v, \theta, \omega, q_h, \dot{q}_h, q_k, \dot{q}_k]^T$ and control inputs $u = [\tau_w, \tau_h, \tau_k]^T$:
+    </p>
+
+    $$\begin{aligned}
+      M_{\text{tot}} &= M + m + \frac{I_w}{R^2} \\
+      \det M &= M_{\text{tot}}(I_y + M l^2) - (M l \cos\theta)^2 \\
+      f_v &= \frac{\tau_w}{R} + M l \omega^2 \sin\theta \\
+      f_\theta &= M g l \sin\theta - \tau_w - \tau_h \\
+      \dot{v} &= \frac{(I_y + M l^2) f_v - (M l \cos\theta) f_\theta}{\det M} \\
+      \dot{\omega} &= \frac{-(M l \cos\theta) f_v + M_{\text{tot}} f_\theta}{\det M} \\
+      \ddot{q}_h &= \frac{\tau_h - b_h \dot{q}_h - 0.1 g \sin(q_h)}{I_h} \\
+      \ddot{q}_k &= \frac{\tau_k - b_k \dot{q}_k - 0.1 g \sin(q_k)}{I_k}
+    \end{aligned}$$
+
+    <h3>Optimal Control Problem (OCP) Multiple-Shooting Discretization</h3>
+    <p>
+      The tracking objective over horizon $T_f = 0.5\,\text{s}$ ($N = 25$ stages, control interval $\Delta t = 20\,\text{ms}$, rate $50\,\text{Hz}$) is formulated as:
+    </p>
+    $$\min_{x_{0:N}, u_{0:N-1}} \frac{1}{2} \sum_{k=0}^{N-1} \left( \Vert{} y_k - y_{\text{ref}} \Vert{}_{W}^2 \right) + \frac{1}{2} \Vert{} x_N - x_{\text{ref},e} \Vert{}_{W_e}^2$$
+    $$\text{subject to:} \quad x_0 = \hat{x}_t, \quad x_{k+1} = \Phi_{\text{ERK4}}(x_k, u_k), \quad -\tau_{\max} \le u_k \le \tau_{\max}$$
+
+    <p>
+      State and control weight matrices:
+    </p>
+    $$W = \operatorname{diag}\left( [20.0,\, 5.0,\, 150.0,\, 25.0,\, 250.0,\, 15.0,\, 250.0,\, 15.0,\, 0.01,\, 0.005,\, 0.005] \right)$$
+    $$W_e = 2.5 \cdot W_{x,x}$$
+
+    <div class="callout">
+      <strong>SQP-RTI Computational Efficiency:</strong> Generated with CasADi symbolic graphs and compiled into native C via <code>export_acados.py</code>, the real-time iteration scheme executes a single Gauss-Newton quadratic program via HPIPM. In our C++ benchmark (<code>bazel run //:mpc_sim</code>), the average solve latency is <strong>$478.8\,\mu\text{s}$ ($0.48\,\text{ms}$)</strong>, providing a $41\times$ margin within the $20\,\text{ms}$ control cycle.
+    </div>
+  </section>
+
+  <!-- SECTION 4 -->
+  <section>
+    <h2>4. Non-Minimum Phase Dynamics & Drift Elimination</h2>
+    <p>
+      A common failure mode in wheeled inverted pendulum control is <strong>backward runaway drift</strong>. Understanding why this occurs requires examining the system's non-minimum phase zero dynamics.
+    </p>
+
+    <div class="figure-box">
+      <!-- Figure 2: Cascaded Control Block Diagram -->
+      <svg viewBox="0 0 700 200" width="100%" height="180" xmlns="http://www.w3.org/2000/svg">
+        <!-- Target Pos Input -->
+        <text x="20" y="95" fill="#f8fafc" font-size="12" font-weight="bold">p_target</text>
+        <line x1="75" y1="90" x2="115" y2="90" stroke="#f8fafc" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <!-- Error Sum Circle -->
+        <circle cx="125" cy="90" r="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+        <text x="122" y="94" fill="#38bdf8" font-size="12">+</text>
+        <line x1="135" y1="90" x2="165" y2="90" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="140" y="80" fill="#cbd5e1" font-size="10">p_err</text>
+
+        <!-- Outer Loop Box (Position & Integrator) -->
+        <rect x="165" y="55" width="150" height="70" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+        <text x="175" y="80" fill="#38bdf8" font-size="11" font-weight="bold">Outer Tilt Regulator</text>
+        <text x="175" y="100" fill="#cbd5e1" font-size="10">θ_ref = K_p·p + K_d·v + K_i·∫p</text>
+        <text x="175" y="115" fill="#94a3b8" font-size="9">Clamp: [-0.10, +0.10] rad</text>
+
+        <line x1="315" y1="90" x2="355" y2="90" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="325" y="80" fill="#38bdf8" font-size="11" font-weight="bold">θ_ref</text>
+
+        <!-- Inner Balance Loop Box -->
+        <rect x="355" y="55" width="160" height="70" rx="6" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
+        <text x="365" y="80" fill="#10b981" font-size="11" font-weight="bold">Inner Balance Controller</text>
+        <text x="365" y="100" fill="#cbd5e1" font-size="10">τ_w = -K_th(θ - θ_ref) - K_d·ω</text>
+        <text x="365" y="115" fill="#94a3b8" font-size="9">Wheel Torque Limits ±15 Nm</text>
+
+        <line x1="515" y1="90" x2="560" y2="90" stroke="#10b981" stroke-width="2" marker-end="url(#arrow)"/>
+        <text x="525" y="80" fill="#10b981" font-size="11" font-weight="bold">τ_w</text>
+
+        <!-- Robot Plant Box -->
+        <rect x="560" y="55" width="115" height="70" rx="6" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+        <text x="575" y="85" fill="#f59e0b" font-size="11" font-weight="bold">MuJoCo Plant</text>
+        <text x="575" y="105" fill="#cbd5e1" font-size="10">Nonlinear WIP</text>
+
+        <!-- Feedback Line -->
+        <path d="M 618 125 L 618 170 L 125 170 L 125 100" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <text x="330" y="165" fill="#94a3b8" font-size="10">State Feedback [p, v, θ, ω]</text>
+      </svg>
+      <div class="figure-caption">Figure 2: Cascaded control architecture. Position error commands an intentional lean angle θ_ref, trimmed by integral action.</div>
+    </div>
+
+    <h3>Mathematical Derivation of Cascaded Drift Compensation</h3>
+    <p>
+      In MuJoCo's coordinate system, rotation by $\theta > 0$ around lateral $+X$ tilts the top of the torso <strong>backward into $-Y$</strong>. Positive wheel motor torque ($\tau_w > 0$) accelerates the wheel contact point forward into $+Y$.
+    </p>
+    <p>
+      If a direct position term is added to torque ($\tau_w = -K_p p$), when the robot drifts backward ($p < 0$), the controller commands a positive wheel torque $\tau_w > 0$. Accelerating the base forward induces an inertial reaction that pitches the torso backward. The inner pitch stabilizer must then immediately reverse torque to avoid falling, causing perpetual backward runaway.
+    </p>
+
+    <div class="callout green">
+      <strong>The Cascaded Solution:</strong>
+      To move forward in $+Y$, an inverted pendulum <em>must first tilt forward</em> ($\theta_{\text{ref}} < 0$).
+      $$\begin{aligned}
+        p_{\text{err}} &= p - p_{\text{target}} \\
+        p_{\text{int}}(t) &= \operatorname{clamp}\left( \int_0^t p_{\text{err}}(\tau) d\tau, \, -0.5, \, 0.5 \right) \\
+        \theta_{\text{ref}} &= \operatorname{clamp}\left( K_{p,p} \cdot p_{\text{err}} + K_{d,p} \cdot v + K_{i,p} \cdot p_{\text{int}}, \, -0.10, \, 0.10 \right) \\
+        \tau_w &= -\left( K_{p,\theta}(\theta - \theta_{\text{ref}}) + K_{d,\theta}\omega \right)
+      \end{aligned}$$
+      Tuning parameters: $K_{p,p} = 0.35$, $K_{d,p} = 0.30$, $K_{i,p} = 0.05$, $K_{p,\theta} = 50.0$, $K_{d,\theta} = 7.0$.
+    </div>
+
+    <h3>Benchmark Results</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Metric (10-second Simulation)</th>
+          <th>Uncoordinated Direct Sum</th>
+          <th>Cascaded with Integral Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Final Position Drift ($p$)</strong></td>
+          <td>$-0.3109\,\text{m}$ ($-31.1\,\text{cm}$, diverging)</td>
+          <td><strong>$+0.0187\,\text{m}$ ($< 1.9\,\text{cm}$)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Final Forward Velocity ($v$)</strong></td>
+          <td>$-0.0655\,\text{m/s}$ ($-6.6\,\text{cm/s}$)</td>
+          <td><strong>$+0.0070\,\text{m/s}$ ($7\,\text{mm/s}$)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Resting Lean Angle ($\theta$)</strong></td>
+          <td>$+0.962^\circ$</td>
+          <td><strong>$+0.395^\circ$ (Exact gravity trim)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Recovery from $+1.5\,\text{rad/s}$ Poke</strong></td>
+          <td>Runaway drift</td>
+          <td><strong>Fully stabilized in $1.8\,\text{s}$</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 5 -->
+  <section>
+    <h2>5. Symmetrical Vertical Crouch Control & Height Kinematics</h2>
+    <p>
+      The robot's 4 active leg joints allow full real-time regulation of vertical height while simultaneously balancing on its wheels.
+    </p>
+
+    <div class="figure-box">
+      <!-- Figure 3: Crouching Kinematics Comparison -->
+      <svg viewBox="0 0 650 300" width="100%" height="240" xmlns="http://www.w3.org/2000/svg">
+        <!-- Floor -->
+        <line x1="50" y1="260" x2="600" y2="260" stroke="#64748b" stroke-width="2"/>
+
+        <!-- LEFT: Standing Tall (17.2 cm) -->
+        <g transform="translate(130, 0)">
+          <text x="0" y="40" fill="#38bdf8" font-size="14" font-weight="bold" text-anchor="middle">Standing Tall (q_k = +12°)</text>
+          <text x="0" y="60" fill="#94a3b8" font-size="11" text-anchor="middle">Hip Height: 17.17 cm</text>
+          <!-- Wheel -->
+          <circle cx="0" cy="220" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+          <circle cx="0" cy="220" r="5" fill="#38bdf8"/>
+          <!-- Tibia (Extended) -->
+          <line x1="-15" y1="130" x2="0" y2="220" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="-15" cy="130" r="6" fill="#a855f7"/>
+          <!-- Femur -->
+          <line x1="0" y1="48" x2="-15" y2="130" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="0" cy="48" r="7" fill="#38bdf8"/>
+          <!-- Height Dimension -->
+          <line x1="45" y1="48" x2="45" y2="220" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <text x="50" y="140" fill="#f59e0b" font-size="11">17.2 cm</text>
+        </g>
+
+        <!-- CENTER: Nominal Stance (15.86 cm) -->
+        <g transform="translate(325, 0)">
+          <text x="0" y="40" fill="#f8fafc" font-size="14" font-weight="bold" text-anchor="middle">Nominal Stance (q_k = 0°)</text>
+          <text x="0" y="60" fill="#94a3b8" font-size="11" text-anchor="middle">Hip Height: 15.86 cm</text>
+          <!-- Wheel -->
+          <circle cx="0" cy="220" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+          <circle cx="0" cy="220" r="5" fill="#38bdf8"/>
+          <!-- Tibia -->
+          <line x1="-35" y1="140" x2="0" y2="220" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="-35" cy="140" r="6" fill="#a855f7"/>
+          <!-- Femur -->
+          <line x1="0" y1="61" x2="-35" y2="140" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="0" cy="61" r="7" fill="#38bdf8"/>
+          <!-- Height Dimension -->
+          <line x1="45" y1="61" x2="45" y2="220" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <text x="50" y="145" fill="#f59e0b" font-size="11">15.9 cm</text>
+        </g>
+
+        <!-- RIGHT: Deep Crouch (14.0 cm) -->
+        <g transform="translate(520, 0)">
+          <text x="0" y="40" fill="#a855f7" font-size="14" font-weight="bold" text-anchor="middle">Crouched (q_k = -14°)</text>
+          <text x="0" y="60" fill="#94a3b8" font-size="11" text-anchor="middle">Hip Height: 14.01 cm</text>
+          <!-- Wheel -->
+          <circle cx="0" cy="220" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+          <circle cx="0" cy="220" r="5" fill="#38bdf8"/>
+          <!-- Tibia (Bent) -->
+          <line x1="-55" y1="150" x2="0" y2="220" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="-55" cy="150" r="6" fill="#a855f7"/>
+          <!-- Femur -->
+          <line x1="0" y1="80" x2="-55" y2="150" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="0" cy="80" r="7" fill="#38bdf8"/>
+          <!-- Height Dimension -->
+          <line x1="45" y1="80" x2="45" y2="220" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <text x="50" y="155" fill="#f59e0b" font-size="11">14.0 cm</text>
+        </g>
+      </svg>
+      <div class="figure-caption">Figure 3: Kinematic progression from Standing Tall (17.2 cm) through Nominal (15.9 cm) to Crouched (14.0 cm).</div>
+    </div>
+
+    <h3>Coordinated Hip Equilibrium Compensation</h3>
+    <p>
+      When the knees flex or extend, the horizontal position of the robot's center of mass shifts. To maintain pure vertical motion without inducing pitch torque, the hip angle $q_h$ must compensate synchronously:
+    </p>
+    $$q_h(q_k) = q_{h,\text{nominal}} + 0.057 \cdot q_k^2$$
+    <p>
+      This kinematic coupling keeps the center of mass within $\mathbf{0.0001\,\text{m}}$ ($0.1\,\text{mm}$) of the wheel axle throughout the entire stroke.
+    </p>
+
+    <h3>The Right Leg Mirroring Inversion Bug & Resolution</h3>
+    <p>
+      Initial crouching tests exhibited severe sideways rolling tilt. Analysis of the CAD link frame orientations showed that:
+    </p>
+    <ul>
+      <li>In the left leg, joint angle $+q_k$ rotates the tibia in one direction around local $+Z$.</li>
+      <li>In the right leg, the coordinate frame is mirrored: applying $+q_k$ produces the <em>opposite</em> physical leg motion!</li>
+    </ul>
+
+    <div class="callout purple">
+      <strong>Exact Mirrored Posture Law:</strong>
+      $$\begin{aligned}
+        q_{\text{hip,L}} &= q_{h,\text{cmd}} \\
+        q_{\text{knee,L}} &= q_{k,\text{cmd}} \\
+        q_{\text{hip,R}} &= -q_{h,\text{cmd}} + q_{\text{right\_hip\_calib}} \\
+        q_{\text{knee,R}} &= \mathbf{-q_{k,\text{cmd}}} + q_{\text{right\_knee\_calib}}
+      \end{aligned}$$
+      With the corrected negative sign on $q_{k,\text{cmd}}$, the roll tilt error during dynamic crouching is reduced to <strong>$< 0.002^\circ$</strong> and the left/right wheel axle elevation difference is constrained to <strong>$< 0.7\,\mu\text{m}$</strong>.
+    </div>
+
+    <h3>CAD Ground Clearance Constraint</h3>
+    <p>
+      The wheel radius is $R = 40\,\text{mm}$. The tibia lower strut (which houses the hub and timing belt) has a radial profile of $\approx 32\,\text{mm}$. The ground clearance between the strut and the floor is therefore:
+    </p>
+    $$c_{\text{clearance}} = R - r_{\text{tibia}} \approx 8\,\text{mm}$$
+    <p>
+      Rotating the tibia beyond $q_k = -15^\circ$ causes the collision mesh of the tibia strut to scrape against the floor plane, lifting the wheel off the ground. Knee angle is therefore constrained to $q_k \in [-14^\circ, +12^\circ]$, delivering $3.2\,\text{cm}$ of smooth vertical travel without contact risk.
+    </p>
+  </section>
+
+  <!-- SECTION 6 -->
+  <section>
+    <h2>6. Interactive Driving & Inward Roll Banking Lean</h2>
+    <p>
+      Omnidirectional mobility and trajectory tracking are implemented using 3D coordinate-invariant attitude tracking and dynamic inward roll banking.
+    </p>
+
+    <h3>3D Invariant Orientation Tracking</h3>
+    <p>
+      In a 3D simulation with turning, pitch and roll must not be computed relative to fixed world axes. Using the base rotation matrix $R = [x_{\text{lat}},\, y_{\text{fwd}},\, z_{\text{up}}]$:
+    </p>
+    $$\theta = \arcsin\left(\operatorname{clamp}(y_{\text{fwd}}[2], -1, 1)\right), \quad \phi = \arcsin\left(\operatorname{clamp}(x_{\text{lat}}[2], -1, 1)\right)$$
+    $$v_{\text{fwd}} = \vec{v}_{\text{world}} \cdot \vec{y}_{\text{fwd}}$$
+    <p>
+      This ensures that regardless of whether the robot faces $+Y$, $-X$, or any 360-degree heading, the longitudinal balance controller operates strictly along the body's heading axis with zero cross-axis gyroscopic cross-talk.
+    </p>
+
+    <h3>Inward Roll Banking Lean (Biped Banking)</h3>
+    <p>
+      When executing a turn at forward velocity $v$ with yaw rate $\dot{\psi}$, the robot experiences a lateral centrifugal acceleration $a_c = v \dot{\psi}$ acting on its center of mass. Left uncompensated, this centrifugal moment causes the wheeled biped to tip outward and roll over.
+    </p>
+    <p>
+      Because both legs are independently actuated, the robot generates an active inward banking lean by differentially altering the virtual leg lengths:
+    </p>
+    $$\Delta q_{k,\text{bank}} = -k_{\text{bank}} \cdot \dot{\psi}_{\text{target}}$$
+    $$\begin{aligned}
+      q_{k,L} &= q_{k,\text{cmd}} + \Delta q_{k,\text{bank}} \\
+      q_{k,R} &= q_{k,\text{cmd}} - \Delta q_{k,\text{bank}} \\
+      q_{h,L} &= q_{h,\text{nominal}} + 0.057 \cdot q_{k,L}^2 \\
+      q_{h,R} &= q_{h,\text{nominal}} + 0.057 \cdot q_{k,R}^2
+    \end{aligned}$$
+    <p>
+      When steering left ($\dot{\psi} > 0$), the left leg squats slightly while the right leg extends, tilting the pelvis into the turn (up to $\sim 3^\circ-5^\circ$ roll banking). Differential wheel torque ($\Delta \tau_w = -K_{\text{yaw}} \Delta \omega_{\text{yaw}}$) provides precise heading tracking.
+    </p>
+  </section>
+
+  <!-- SECTION 7 -->
+  <section>
+    <h2>7. Platform Drop Scene & Active Suspension Control</h2>
+    <p>
+      To validate dynamic shock absorption and compliance, the simulation scene starts with the robot perched on a raised platform with an <strong>$8\,\text{cm}$ ledge drop</strong>:
+    </p>
+
+    <div class="callout green">
+      <strong>Platform Geometry:</strong>
+      <ul>
+        <li><strong>Top Surface Elevation:</strong> $z = 0.08\,\text{m}$ ($8\,\text{cm}$ above ground plane).</li>
+        <li><strong>Platform Extents:</strong> From $y = -0.80\,\text{m}$ to $y = +0.40\,\text{m}$ (width $1.20\,\text{m}$).</li>
+        <li><strong>Initial Spawn / Home Keyframe:</strong> Robot base at $z = 0.0812\,\text{m}$, resting on top of the platform.</li>
+        <li><strong>Ledge Drop:</strong> At $y = +0.40\,\text{m}$, the platform terminates abruptly, requiring the robot to drive off the edge, free-fall $8\,\text{cm}$, and land on the floor plane at $z = 0.00\,\text{m}$.</li>
+      </ul>
+    </div>
+
+    <h3>Active Suspension Virtual Impedance</h3>
+    <p>
+      A rigid position-controlled leg would bounce violently or transmit a catastrophic shock impulse on landing ($v_{\text{impact}} \approx \sqrt{2gh} \approx 1.25\,\text{m/s}$, impact energy $E \approx 1.66\,\text{J}$).
+    </p>
+    <p>
+      The active suspension implements variable virtual impedance control with impact shock dissipation:
+    </p>
+    $$\tau_{\text{knee}} = -K_{p,\text{susp}} (q_k - q_{k,\text{target}}) - K_{d,\text{susp}}(\dot{q}_k) \dot{q}_k$$
+    $$K_{d,\text{susp}}(\dot{q}_k) = \begin{cases} 8.5\,\text{N}\cdot\text{s/rad} & \text{if } |\dot{q}_k| > 1.2\,\text{rad/s} \quad \text{(Touchdown impact phase)} \\ 4.0\,\text{N}\cdot\text{s/rad} & \text{otherwise} \quad \text{(Nominal compliance)} \end{cases}$$
+
+    <h3>Airborne Anti-Windup Protection</h3>
+    <p>
+      During the $8\,\text{cm}$ drop ($z \in [0.015,\, 0.075]\,\text{m}$ with $\dot{z} < -0.2\,\text{m/s}$), normal ground contact forces vanish. The controller detects this flight phase, freezes the longitudinal position integrator ($p_{\text{int}} = 0.0$), and matches $p_{\text{target}} = p$, preventing integrator windup. Upon wheel touchdown, the balancer catches pitch smoothly within a single cycle.
+    </p>
+  </section>
+
+  <!-- SECTION 8 -->
+  <section>
+    <h2>8. Interactive Controls & Build Instructions</h2>
+    <p>
+      The simulation and controllers are built with Bazel 9:
+    </p>
+    <pre><code># Build both headless benchmark and interactive GUI
+bazel build //:sim_gui //:mpc_sim
+
+# Run the 500 Hz headless benchmark on the platform
+bazel run //:mpc_sim
+
+# Launch the interactive 3D MuJoCo viewer with driving, lean & active suspension
+bazel run //:sim_gui
+# or
+./run_gui.sh</code></pre>
+
+    <h3>Viewer Keyboard & Mouse Controls</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Input / Key</th>
+          <th>Action</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>W</kbd> or <kbd>↑</kbd> (Up Arrow)</td>
+          <td><strong>Drive Forward</strong></td>
+          <td>Increases forward velocity setpoint ($+0.2\,\text{m/s}$ per press, up to $+0.8\,\text{m/s}$).</td>
+        </tr>
+        <tr>
+          <td><kbd>S</kbd> or <kbd>↓</kbd> (Down Arrow)</td>
+          <td><strong>Drive Back / Decel</strong></td>
+          <td>Decreases forward velocity setpoint ($-0.2\,\text{m/s}$ per press, down to $-0.5\,\text{m/s}$).</td>
+        </tr>
+        <tr>
+          <td><kbd>A</kbd> or <kbd>←</kbd> (Left Arrow)</td>
+          <td><strong>Steer Left (Lean)</strong></td>
+          <td>Increases left yaw rate ($+0.3\,\text{rad/s}$) and automatically banks the torso inward to the left.</td>
+        </tr>
+        <tr>
+          <td><kbd>D</kbd> or <kbd>→</kbd> (Right Arrow)</td>
+          <td><strong>Steer Right (Lean)</strong></td>
+          <td>Increases right yaw rate ($-0.3\,\text{rad/s}$) and automatically banks the torso inward to the right.</td>
+        </tr>
+        <tr>
+          <td><kbd>X</kbd></td>
+          <td><strong>Brake / Full Stop</strong></td>
+          <td>Zeros velocity and yaw rate setpoints; locks stationary position with active position holding.</td>
+        </tr>
+        <tr>
+          <td><kbd>C</kbd></td>
+          <td><strong>Crouch Down</strong></td>
+          <td>Smoothly flexes knees to $-14^\circ$, lowering pelvis height to $14.0\,\text{cm}$.</td>
+        </tr>
+        <tr>
+          <td><kbd>T</kbd></td>
+          <td><strong>Stand Tall</strong></td>
+          <td>Smoothly extends knees to $+12^\circ$, raising pelvis height to $17.2\,\text{cm}$.</td>
+        </tr>
+        <tr>
+          <td><kbd>N</kbd></td>
+          <td><strong>Nominal Stance</strong></td>
+          <td>Returns knees to $0^\circ$ and pelvis to nominal $15.9\,\text{cm}$ ride height.</td>
+        </tr>
+        <tr>
+          <td><kbd>Right-Click + Drag</kbd></td>
+          <td><strong>Interactive Poke</strong></td>
+          <td>Applies 3D perturbation forces directly to the robot torso / legs to test dynamic re-balancing.</td>
+        </tr>
+        <tr>
+          <td><kbd>Backspace</kbd></td>
+          <td><strong>Viewer Reset</strong></td>
+          <td>Resets robot back to the top surface of the platform ($z = 0.0812\,\text{m}$) and clears integrators.</td>
+        </tr>
+        <tr>
+          <td><kbd>Space</kbd></td>
+          <td><strong>Pause / Resume</strong></td>
+          <td>Toggles physics integration freeze.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# Bazel build outputs
+bazel-*
+
+# Compiled object files and libraries
+*.o
+*.so
+!third_party/**
+
+# Python virtual environment and bytecode
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Windows / WSL alternate data stream metadata
+*:Zone.Identifier
+
+# Logs
+MUJOCO_LOG.TXT
+*.log
+
+# CAD STEP files and generators
+*.step
+*.STEP
+all_step.py
+bdx_r_acrobat_rev_2_0_parametric_step_generator.py
+generate_bdxr_acrobat_rev2_full_assembly-v2.py
+CAD/*step_generator.py
+
+# Test directory
+test/

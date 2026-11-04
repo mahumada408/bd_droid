@@ -1,0 +1,139 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/3f8f64596c750ad739a3ccc2/w/9b1f2c2be98d80105dc3361e/e/5e6c351f0eb2f59ff8407b92 -->
+<mujoco model="CAD">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+  <default>
+    <default class="CAD">
+      <joint frictionloss="0.1" armature="0.005"/>
+      <position kp="50" dampratio="1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
+  <worldbody>
+    <!-- Link body_base -->
+    <body name="body_base" pos="0 0 0.1172" quat="1 0 0 0" childclass="CAD">
+      <freejoint name="root"/>
+      <camera name="track_robot" mode="trackcom" pos="0 -1.35 0.4" xyaxes="1 0 0 0 0.35 0.94"/>
+      <inertial pos="-0.0779576 -0.0769886 0.206328" mass="0.968285" fullinertia="0.00224433 0.00223324 0.00335588 -8.56735e-07 1.13779e-07 2.27702e-05"/>
+      <!-- Part fake_box -->
+      <geom type="mesh" class="visual" pos="-0.0779208 -0.0905257 0.169322" quat="1 0 0 0" mesh="fake_box" material="fake_box_material"/>
+      <geom type="mesh" class="collision" pos="-0.0779208 -0.0905257 0.169322" quat="1 0 0 0" mesh="fake_box" material="fake_box_material"/>
+      <!-- Part body_base -->
+      <geom type="mesh" class="visual" pos="-0.0779208 -0.0905257 0.172322" quat="1 0 0 0" mesh="body_base" material="body_base_material"/>
+      <geom type="mesh" class="collision" pos="-0.0779208 -0.0905257 0.172322" quat="1 0 0 0" mesh="body_base" material="body_base_material"/>
+      <!-- Link hip_roll_right -->
+      <body name="hip_roll_right" pos="-0.126921 -0.0525257 0.197322" quat="0.707107 0.707107 -0 -0">
+        <!-- Joint from body_base to hip_roll_right -->
+        <joint axis="0 0 1" name="right_hip_roll" type="hinge"/>
+        <inertial pos="-0.00251607 -0.000206848 0.05" mass="0.063409" fullinertia="4.69392e-05 4.21945e-05 3.9389e-05 1.91239e-07 -1e-12 -2e-12"/>
+        <!-- Part hip_roll_right -->
+        <geom type="mesh" class="visual" pos="0.0499649 -0.0230111 0.038" quat="0.706964 -0.706964 -0.0142077 0.0142077" mesh="hip_roll_right" material="hip_roll_right_material"/>
+        <geom type="mesh" class="collision" pos="0.0499649 -0.0230111 0.038" quat="0.706964 -0.706964 -0.0142077 0.0142077" mesh="hip_roll_right" material="hip_roll_right_material"/>
+        <!-- Link femur -->
+        <body name="femur" pos="-0.0359709 -0.00144638 0.05" quat="0.693238 0.111394 0.698277 0.139359">
+          <!-- Joint from hip_roll_right to femur -->
+          <joint axis="0 0 1" name="right_hip_pitch" type="hinge"/>
+          <inertial pos="0 -0.0848101 -0.016556" mass="0.190488" fullinertia="0.000354816 8.26758e-05 0.0003327 0 -0 -6.36734e-05"/>
+          <!-- Part femur -->
+          <geom type="mesh" class="visual" pos="0 -0.21 0.005" quat="0.5 -0.5 -0.5 -0.5" mesh="femur" material="femur_material"/>
+          <geom type="mesh" class="collision" pos="0 -0.21 0.005" quat="0.5 -0.5 -0.5 -0.5" mesh="femur" material="femur_material"/>
+          <!-- Link tibia -->
+          <body name="tibia" pos="0 -0.105 -0.022" quat="0 1 0 0">
+            <!-- Joint from femur to tibia -->
+            <joint axis="0 0 1" name="right_knee" type="hinge"/>
+            <inertial pos="-0.0737471 0.0418821 -0.015444" mass="0.190488" fullinertia="0.000149043 0.000288448 0.0003327 0.000116861 5.53676e-05 -3.14441e-05"/>
+            <!-- Part tibia -->
+            <geom type="mesh" class="visual" pos="-0.0913034 0.0518526 -0.037" quat="0.180585 0.683659 -0.180585 0.683659" mesh="tibia" material="tibia_material"/>
+            <geom type="mesh" class="collision" pos="-0.0913034 0.0518526 -0.037" quat="0.180585 0.683659 -0.180585 0.683659" mesh="tibia" material="tibia_material"/>
+            <!-- Link wheel -->
+            <body name="wheel" pos="-0.0913034 0.0518526 0.0195" quat="0.836939 -0 0 0.547296">
+              <!-- Joint from tibia to wheel -->
+              <joint axis="0 0 1" name="right_wheel"/>
+              <inertial pos="0 -0 0" mass="0.0431969" fullinertia="2.70881e-05 2.70881e-05 5.39961e-05 0 -0 -0"/>
+              <!-- Part wheel -->
+              <geom type="mesh" class="visual" pos="0 0 0.0025" quat="0.5 0.5 0.5 -0.5" mesh="wheel" material="wheel_material"/>
+              <geom type="mesh" class="collision" pos="0 0 0.0025" quat="0.5 0.5 0.5 -0.5" mesh="wheel" material="wheel_material"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <!-- Link hip_roll_left -->
+      <body name="hip_roll_left" pos="-0.0289208 -0.128526 0.197322" quat="0.706964 -0.706964 -0.0142077 -0.0142077">
+        <!-- Joint from body_base to hip_roll_left -->
+        <joint axis="0 0 1" name="left_hip_roll" type="hinge"/>
+        <inertial pos="0.00252235 0.000105595 0.026" mass="0.063409" fullinertia="4.69468e-05 4.21868e-05 3.9389e-05 1.48e-10 -1e-12 -2e-12"/>
+        <!-- Part hip_roll_left -->
+        <geom type="mesh" class="visual" pos="-0.049 0.025 0.038" quat="0.707107 0.707107 -0 0" mesh="hip_roll_left" material="hip_roll_left_material"/>
+        <geom type="mesh" class="collision" pos="-0.049 0.025 0.038" quat="0.707107 0.707107 -0 0" mesh="hip_roll_left" material="hip_roll_left_material"/>
+        <!-- Link femur_2 -->
+        <body name="femur_2" pos="0.0025 -0 0.026" quat="0.707107 -0 -0.707107 -0">
+          <!-- Joint from hip_roll_left to femur_2 -->
+          <joint axis="0 0 1" name="left_hip_pitch" type="hinge"/>
+          <inertial pos="0.032122 0.0784916 -0.050056" mass="0.190488" fullinertia="0.000315776 0.000121715 0.0003327 -9.53944e-05 2.41164e-05 5.89296e-05"/>
+          <!-- Part femur_2 -->
+          <geom type="mesh" class="visual" pos="0.0795379 0.194355 -0.0285" quat="0.587101 0.394096 -0.587101 0.394096" mesh="femur" material="femur_material"/>
+          <geom type="mesh" class="collision" pos="0.0795379 0.194355 -0.0285" quat="0.587101 0.394096 -0.587101 0.394096" mesh="femur" material="femur_material"/>
+          <!-- Link tibia_2 -->
+          <body name="tibia_2" pos="0.0397689 0.0971773 -0.0555" quat="0 -0.193005 -0.981198 -0">
+            <!-- Joint from femur_2 to tibia_2 -->
+            <joint axis="0 0 1" name="left_knee" type="hinge"/>
+            <inertial pos="0.0765422 0.0365245 -0.015444" mass="0.190488" fullinertia="0.000133149 0.000304342 0.0003327 -0.000105775 -5.74661e-05 -2.74217e-05"/>
+            <!-- Part tibia_2 -->
+            <geom type="mesh" class="visual" pos="0.0947639 0.0452195 -0.037" quat="0.689658 0.156114 -0.689658 0.156114" mesh="tibia" material="tibia_material"/>
+            <geom type="mesh" class="collision" pos="0.0947639 0.0452195 -0.037" quat="0.689658 0.156114 -0.689658 0.156114" mesh="tibia" material="tibia_material"/>
+            <!-- Link wheel_2 -->
+            <body name="wheel_2" pos="0.0947639 0.0452195 0.0195" quat="0 -0.28093 0.959728 0">
+              <!-- Joint from tibia_2 to wheel_2 -->
+              <joint axis="0 0 1" name="left_wheel"/>
+              <inertial pos="0 -0 0" mass="0.0431969" fullinertia="2.70881e-05 2.70881e-05 5.39961e-05 0 0 0"/>
+              <!-- Part wheel_2 -->
+              <geom type="mesh" class="visual" pos="0 0 0.0025" quat="0.5 0.5 0.5 -0.5" mesh="wheel" material="wheel_material"/>
+              <geom type="mesh" class="collision" pos="0 0 0.0025" quat="0.5 0.5 0.5 -0.5" mesh="wheel" material="wheel_material"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <asset>
+    <mesh file="hip_roll_left.stl"/>
+    <mesh file="hip_roll_right.stl"/>
+    <mesh file="femur.stl"/>
+    <mesh file="wheel.stl"/>
+    <mesh file="tibia.stl"/>
+    <mesh file="fake_box.stl"/>
+    <mesh file="body_base.stl"/>
+    <material name="fake_box_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="body_base_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="hip_roll_right_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="femur_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="tibia_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="wheel_material" rgba="0 0 0 1"/>
+    <material name="hip_roll_left_material" rgba="0.647059 0.647059 0.647059 1"/>
+  </asset>
+  <actuator>
+    <motor name="right_hip_roll" joint="right_hip_roll" gear="1" ctrllimited="true" ctrlrange="-15 15"/>
+    <motor name="right_hip_pitch" joint="right_hip_pitch" gear="1" ctrllimited="true" ctrlrange="-15 15"/>
+    <motor name="right_knee" joint="right_knee" gear="1" ctrllimited="true" ctrlrange="-15 15"/>
+    <motor name="right_wheel" joint="right_wheel" gear="1" ctrllimited="true" ctrlrange="-5 5"/>
+    <motor name="left_hip_roll" joint="left_hip_roll" gear="1" ctrllimited="true" ctrlrange="-15 15"/>
+    <motor name="left_hip_pitch" joint="left_hip_pitch" gear="1" ctrllimited="true" ctrlrange="-15 15"/>
+    <motor name="left_knee" joint="left_knee" gear="1" ctrllimited="true" ctrlrange="-15 15"/>
+    <motor name="left_wheel" joint="left_wheel" gear="1" ctrllimited="true" ctrlrange="-5 5"/>
+  </actuator>
+  <equality/>
+  <keyframe>
+    <key name="home" qpos="0 0 0.1172 1 0 0 0 0 0.314503 -0.052919 0 0 -0.212551 0.253279 0"/>
+  </keyframe>
+  <equality/>
+  <contact>
+    <exclude body1="body_base" body2="femur"/>
+    <exclude body1="body_base" body2="femur_2"/>
+  </contact>
+</mujoco>

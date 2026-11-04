@@ -1,0 +1,19 @@
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_import(
+    name = "mujoco_shared",
+    shared_library = "libmujoco.so",
+)
+
+cc_library(
+    name = "mujoco",
+    hdrs = glob(["include/**/*.h"]),
+    includes = [
+        "include",
+    ],
+    deps = [
+        ":mujoco_shared",
+    ],
+)

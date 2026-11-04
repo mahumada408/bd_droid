@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nonlinear Model Predictive Control: Two-Wheeled Balancing Robot</title>
+  
+  <!-- KaTeX for academic math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false}
+          ]});"></script>
+
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-subtle: rgba(56, 189, 248, 0.12);
+      --code-bg: #0b1120;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      padding: 1.5rem 1rem 4rem 1rem;
+    }
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.5rem;
+      line-height: 1.25;
+    }
+    .metadata {
+      font-size: 0.88rem;
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+      padding-bottom: 0.25rem;
+    }
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    p, li {
+      font-size: 0.98rem;
+      color: #cbd5e1;
+      margin-bottom: 0.85rem;
+    }
+    ul, ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .figure-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1.5rem 0;
+      text-align: center;
+    }
+    .figure-caption {
+      margin-top: 0.6rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    svg text {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      margin-bottom: 1.25rem;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85em;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.15em 0.35em;
+      border-radius: 3px;
+      color: var(--accent);
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+    .callout {
+      background: var(--accent-subtle);
+      border-left: 4px solid var(--accent);
+      padding: 0.85rem 1rem;
+      margin: 1.25rem 0;
+      border-radius: 0 6px 6px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.8rem;
+      text-align: left;
+    }
+    th {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Embedded NMPC for Two-Wheeled Inverted Pendulum</h1>
+    <div class="metadata">Derivation, acados Real-Time Iteration (RTI), and MuJoCo Simulation</div>
+  </header>
+
+  <section>
+    <h2>1. Mathematical Formulation & System Dynamics</h2>
+    <p>
+      The robot is modeled as an inverted pendulum mounted on two independent coaxial wheels of radius $R$. The forward displacement is denoted by $x$, the torso pitch deviation from vertical by $\theta$, and the motor torque reaction by $\tau$.
+    </p>
+
+    <div class="figure-box">
+      <!-- Figure 1: Model Kinematics & Free Body Diagram -->
+      <svg viewBox="0 0 500 360" width="100%" height="260" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="310" x2="450" y2="310" stroke="#64748b" stroke-width="2"/>
+        <line x1="200" y1="310" x2="200" y2="50" stroke="#475569" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <g transform="translate(200, 260) rotate(14)">
+          <rect x="-18" y="-190" width="36" height="200" rx="4" fill="#38bdf8" fill-opacity="0.25" stroke="#38bdf8" stroke-width="2"/>
+          <line x1="0" y1="0" x2="0" y2="-200" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2 2"/>
+          <circle cx="0" cy="-95" r="9" fill="#f59e0b"/>
+          <path d="M 0 -95 L 9 -95 A 9 9 0 0 1 0 -86 Z" fill="#0f172a"/>
+          <path d="M 0 -95 L -9 -95 A 9 9 0 0 1 0 -104 Z" fill="#0f172a"/>
+          <text x="16" y="-90" fill="#f59e0b" font-size="12" font-weight="bold">CM (M, I_y)</text>
+          <path d="M 28 -20 A 30 30 0 0 1 -28 -20" fill="none" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow)"/>
+          <text x="32" y="-15" fill="#ef4444" font-size="12" font-weight="bold">-τ</text>
+        </g>
+        <circle cx="200" cy="260" r="50" fill="#1e293b" stroke="#94a3b8" stroke-width="3"/>
+        <circle cx="200" cy="260" r="6" fill="#f1f5f9"/>
+        <line x1="200" y1="260" x2="242" y2="285" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="225" y="270" fill="#94a3b8" font-size="11">R</text>
+        <path d="M 200 130 A 130 130 0 0 1 231 134" fill="none" stroke="#f1f5f9" stroke-width="1.5"/>
+        <text x="212" y="118" fill="#f1f5f9" font-size="13" font-weight="bold">θ</text>
+        <path d="M 180 230 A 35 35 0 0 1 220 230" fill="none" stroke="#10b981" stroke-width="2"/>
+        <text x="228" y="235" fill="#10b981" font-size="12" font-weight="bold">+τ</text>
+        <line x1="200" y1="330" x2="280" y2="330" stroke="#f1f5f9" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <text x="235" y="348" fill="#f1f5f9" font-size="12">x (Forward)</text>
+      </svg>
+      <div class="figure-caption">Figure 1: Coordinate frames, kinematics, and torque interactions.</div>
+    </div>
+
+    <h3>Euler-Lagrange Equations of Motion</h3>
+    <p>
+      The generalized coordinates are $q = [x, \theta]^T$. The non-linear dynamics are expressed in standard manipulator form:
+    </p>
+    $$M(q)\ddot{q} + C(q, \dot{q})\dot{q} + G(q) = B u$$
+    <p>Where:</p>
+    $$M(q) = \begin{bmatrix} M + m + \frac{I_w}{R^2} & M l \cos\theta \\ M l \cos\theta & I_y + M l^2 \end{bmatrix}, \quad C(q, \dot{q}) = \begin{bmatrix} 0 & -M l \dot{\theta} \sin\theta \\ 0 & 0 \end{bmatrix}$$
+    $$G(q) = \begin{bmatrix} 0 \\ -M g l \sin\theta \end{bmatrix}, \quad B = \begin{bmatrix} \frac{1}{R} \\ -1 \end{bmatrix}, \quad u = \tau$$
+
+    <p>
+      Defining the state vector $x = [p, v, \theta, \omega]^T$, the explicit first-order non-linear ODE $\dot{x} = f_{\text{expl}}(x, u)$ is obtained via matrix inversion:
+    </p>
+    $$\begin{bmatrix} \dot{v} \\ \dot{\omega} \end{bmatrix} = M(q)^{-1} \left( B u - C(q, \dot{q})\dot{q} - G(q) \right)$$
+  </section>
+
+  <section>
+    <h2>2. acados Optimal Control Formulation</h2>
+    <p>
+      We discretize the continuous system over horizon $T_f = 0.5\,\text{s}$ into $N = 25$ steps ($\Delta t = 20\,\text{ms}$, running at $50\,\text{Hz}$). The multiple-shooting NLP minimizes tracking error under strict torque bounds:
+    </p>
+
+    $$\min_{x_{0:N}, u_{0:N-1}} \sum_{k=0}^{N-1} \frac{1}{2} \Vert{} y_k - y_{\text{ref}} \Vert{}_{W}^2 + \frac{1}{2} \Vert{} y_N - y_{\text{ref},e} \Vert{}_{W_e}^2$$
+    $$\text{subject to:} \quad x_0 = \hat{x}_t, \quad x_{k+1} = \Phi_{\text{RK4}}(x_k, u_k), \quad -\tau_{\max} \le u_k \le \tau_{\max}$$
+
+    <div class="figure-box">
+      <!-- Figure 2: Receding Horizon Control -->
+      <svg viewBox="0 0 500 160" width="100%" height="130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="40" y1="130" x2="460" y2="130" stroke="#64748b" stroke-width="1.5"/>
+        <path d="M 40 100 Q 120 40 220 80 T 450 65" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+        <line x1="40" y1="65" x2="460" y2="65" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <circle cx="40" cy="100" r="5" fill="#ef4444"/>
+        <text x="32" y="120" fill="#ef4444" font-size="10">t_0</text>
+        <circle cx="90" cy="74" r="3.5" fill="#38bdf8"/>
+        <circle cx="140" cy="62" r="3.5" fill="#38bdf8"/>
+        <circle cx="190" cy="75" r="3.5" fill="#38bdf8"/>
+        <circle cx="240" cy="81" r="3.5" fill="#38bdf8"/>
+        <text x="240" y="100" fill="#94a3b8" font-size="10">k+N</text>
+        <rect x="35" y="15" width="80" height="30" rx="4" fill="#10b981" fill-opacity="0.2" stroke="#10b981"/>
+        <text x="42" y="34" fill="#10b981" font-size="11" font-weight="bold">Execute u_0*</text>
+      </svg>
+      <div class="figure-caption">Figure 2: Receding horizon execution principle. Only $u_0^*$ is sent to actuators.</div>
+    </div>
+
+    <div class="callout">
+      <strong>Real-Time Iteration (RTI) Scheme:</strong> Rather than iterating an interior-point solver to numerical convergence at each timestep, acados employs an SQP-RTI scheme. The nonlinear problem is linearized during the preparation phase, and a single QP is solved via HPIPM during the feedback phase, yielding solve times under <strong>250 microseconds</strong>.
+    </div>
+  </section>
+
+  <section>
+    <h2>3. Python Code Generation Script (`export_acados.py`)</h2>
+    <pre><code>import os
+import casadi as cs
+import numpy as np
+from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
+
+def export_robot_model() -> AcadosModel:
+    model_name = "two_wheeled_balancer"
+    
+    # Dynamics parameters matching robot.xml
+    M, m, L, l = 2.0, 0.4, 0.3, 0.15
+    I_y = (1.0 / 12.0) * M * (L**2)
+    R = 0.05
+    I_w = 0.5 * m * (R**2)
+    g = 9.81
+    
+    p = cs.SX.sym('p')
+    v = cs.SX.sym('v')
+    theta = cs.SX.sym('theta')
+    omega = cs.SX.sym('omega')
+    x = cs.vertcat(p, v, theta, omega)
+    
+    tau = cs.SX.sym('tau')
+    u = cs.vertcat(tau)
+    
+    M_tot = M + m + (I_w / (R**2))
+    det_M = M_tot * (I_y + M * (l**2)) - (M * l * cs.cos(theta))**2
+    
+    f_v = (tau / R) + M * l * (omega**2) * cs.sin(theta)
+    f_th = M * g * l * cs.sin(theta) - tau
+    
+    v_dot = ((I_y + M * (l**2)) * f_v - (M * l * cs.cos(theta)) * f_th) / det_M
+    omega_dot = (-(M * l * cs.cos(theta)) * f_v + M_tot * f_th) / det_M
+    
+    f_expl = cs.vertcat(v, v_dot, omega, omega_dot)
+    
+    model = AcadosModel()
+    model.name = model_name
+    model.x = x
+    model.u = u
+    model.f_expl_expr = f_expl
+    model.xdot = cs.SX.sym('xdot', 4)
+    model.f_impl_expr = model.xdot - f_expl
+    return model
+
+def generate_solver():
+    ocp = AcadosOcp()
+    model = export_robot_model()
+    ocp.model = model
+    
+    Tf, N = 0.5, 25
+    ocp.dims.N = N
+    ocp.solver_options.tf = Tf
+    
+    nx, nu = 4, 1
+    ny, ny_e = nx + nu, nx
+    ocp.cost.cost_type = 'LINEAR_LS'
+    ocp.cost.cost_type_e = 'LINEAR_LS'
+    
+    Q = np.array([10.0, 1.0, 50.0, 5.0])
+    R_weight = np.array([0.05])
+    ocp.cost.W = np.diag(np.concatenate([Q, R_weight]))
+    ocp.cost.W_e = np.diag(Q * 2.0)
+    
+    ocp.cost.Vx = np.zeros((ny, nx))
+    ocp.cost.Vx[:nx, :nx] = np.eye(nx)
+    ocp.cost.Vu = np.zeros((ny, nu))
+    ocp.cost.Vu[nx:, :] = np.eye(nu)
+    ocp.cost.Vx_e = np.eye(ny_e)
+    
+    ocp.cost.yref = np.zeros(ny)
+    ocp.cost.yref_e = np.zeros(ny_e)
+    
+    ocp.constraints.lbu = np.array([-1.5])
+    ocp.constraints.ubu = np.array([1.5])
+    ocp.constraints.idxbu = np.array([0])
+    ocp.constraints.x0 = np.zeros(nx)
+    
+    ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
+    ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
+    ocp.solver_options.integrator_type = 'ERK'
+    ocp.solver_options.nlp_solver_type = 'SQP_RTI'
+    
+    solver = AcadosOcpSolver(ocp, json_file='acados_ocp_balancer.json')
+    print("Code generation complete in c_generated_code/")
+
+if __name__ == '__main__':
+    generate_solver()</code></pre>
+  </section>
+
+  <section>
+    <h2>4. C++ Execution in MuJoCo Harness</h2>
+    <pre><code>#include &lt;mujoco/mujoco.h&gt;
+#include &lt;iostream&gt;
+#include &lt;chrono&gt;
+#include "acados_solver_two_wheeled_balancer.h"
+
+int main() {
+    mjModel* m = mj_loadXML("robot.xml", nullptr, nullptr, 0);
+    mjData* d = mj_makeData(m);
+
+    // Initialize acados preallocated C capsule
+    auto* capsule = two_wheeled_balancer_acados_create_capsule();
+    two_wheeled_balancer_acados_create(capsule);
+    
+    auto* config = two_wheeled_balancer_acados_get_nlp_config(capsule);
+    auto* dims = two_wheeled_balancer_acados_get_nlp_dims(capsule);
+    auto* in = two_wheeled_balancer_acados_get_nlp_in(capsule);
+    auto* out = two_wheeled_balancer_acados_get_nlp_out(capsule);
+
+    const int decimation = 10; // 500 Hz physics / 10 = 50 Hz MPC
+    int steps = 0;
+    double u_opt = 0.0;
+
+    while (d-&gt;time &lt; 10.0) {
+        if (steps % decimation == 0) {
+            // Extract state: [x, v, theta, omega]
+            double pos = d-&gt;qpos[0];
+            double vel = d-&gt;qvel[0];
+            double pitch = 2.0 * std::asin(d-&gt;qpos[5]);
+            double pitch_rate = d-&gt;qvel[4];
+            double x0[4] = {pos, vel, pitch, pitch_rate};
+
+            ocp_nlp_constraints_model_set(config, dims, in, 0, "lbx", x0);
+            ocp_nlp_constraints_model_set(config, dims, in, 0, "ubx", x0);
+
+            // Solve single RTI iteration
+            two_wheeled_balancer_acados_solve(capsule);
+            ocp_nlp_out_get(config, dims, out, 0, "u", &u_opt);
+        }
+
+        d-&gt;ctrl[0] = 0.5 * u_opt;
+        d-&gt;ctrl[1] = 0.5 * u_opt;
+        mj_step(m, d);
+        steps++;
+    }
+
+    two_wheeled_balancer_acados_free(capsule);
+    two_wheeled_balancer_acados_free_capsule(capsule);
+    mj_deleteData(d);
+    mj_deleteModel(m);
+    return 0;
+}</code></pre>
+  </section>
+
+</div>
+</body>
+</html>
