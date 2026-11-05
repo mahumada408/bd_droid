@@ -14,9 +14,49 @@ import sys
 import time
 import argparse
 import contextlib
+import ctypes
 import numpy as np
 import mujoco
 import mujoco.viewer
+
+
+def load_acados_mpc():
+    """Attempts to load the compiled acados C++ NMPC shared library."""
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "bazel-bin", "libbalancer_mpc.so"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "libbalancer_mpc.so"),
+        "bazel-bin/libbalancer_mpc.so",
+        "libbalancer_mpc.so",
+    ]
+    if "RUNFILES_DIR" in os.environ:
+        candidates.insert(0, os.path.join(os.environ["RUNFILES_DIR"], "_main", "libbalancer_mpc.so"))
+
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                lib = ctypes.CDLL(path)
+                lib.mpc_create.restype = ctypes.c_void_p
+                lib.mpc_destroy.argtypes = [ctypes.c_void_p]
+                lib.mpc_step.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_double, ctypes.c_double,
+                    ctypes.c_double, ctypes.c_double,
+                    ctypes.c_double, ctypes.c_double,
+                    ctypes.c_double, ctypes.c_double,
+                    ctypes.c_double,
+                    ctypes.c_double,
+                    ctypes.c_double,
+                    ctypes.c_double,
+                    ctypes.c_int,
+                    ctypes.POINTER(ctypes.c_double),
+                    ctypes.POINTER(ctypes.c_double)
+                ]
+                handle = lib.mpc_create()
+                if handle:
+                    return lib, handle, path
+            except Exception as e:
+                pass
+    return None, None, None
 
 
 def main():
@@ -27,14 +67,18 @@ def main():
     parser.add_argument("--duration", type=float, default=None, help="Maximum simulation duration in seconds")
     parser.add_argument("--log-pitch", type=str, default=None, help="Path to write base pitch log CSV")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode without GUI window")
+    parser.add_argument("--wavy", action="store_true", help="Load dual-lane offset wavy terrain runway (CAD/wavy_scene.xml)")
+    parser.add_argument("--speed", type=float, default=None, help="Target forward cruising speed in m/s")
+    parser.add_argument("--controller", type=str, choices=["wbc", "nmpc"], default="wbc", help="Active controller: 'wbc' (Hierarchical Whole-Body QP) or 'nmpc' (acados SQP-RTI NMPC)")
     args, unknown = parser.parse_known_args()
 
     if args.repeat_flips > 1:
         args.auto_flip = True
 
-    model_xml = os.path.join(os.path.dirname(__file__), "CAD", "scene.xml")
+    scene_file = "wavy_scene.xml" if args.wavy else "scene.xml"
+    model_xml = os.path.join(os.path.dirname(__file__), "CAD", scene_file)
     if not os.path.isfile(model_xml):
-        model_xml = "CAD/scene.xml"
+        model_xml = os.path.join("CAD", scene_file)
 
     print(f"[Init] Loading MuJoCo model from: {model_xml}")
     m = mujoco.MjModel.from_xml_path(model_xml)
@@ -50,14 +94,21 @@ def main():
     # Initial platform position and home targets
     # Wheel track center is at x_root = +0.0705m. Spawning at -0.28m gives symmetric margin on 1.2m platform.
     is_multi_flip = args.auto_flip or args.repeat_flips > 1
-    x_start = -0.28 if is_multi_flip else 0.0
-    y_home = -0.12 if is_multi_flip else 0.0
-    x_home = 0.07 if is_multi_flip else 0.0
+    if args.wavy:
+        x_start = 0.0705
+        y_home = -0.80
+        z_start = 0.0772
+        x_home = 0.0705
+    else:
+        x_start = -0.28 if is_multi_flip else 0.0
+        y_home = -0.12 if is_multi_flip else 0.0
+        z_start = 0.1172
+        x_home = 0.07 if is_multi_flip else 0.0
 
-    # Spawn resting on top of raised platform (z = 0.08m)
+    # Spawn resting on ground/platform
     d.qpos[0] = x_start
     d.qpos[1] = y_home
-    d.qpos[2] = 0.1172
+    d.qpos[2] = z_start
     d.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
 
     d.qpos[7] = 0.0         # right_hip_roll
@@ -87,6 +138,11 @@ def main():
     print("    - NOMINAL HEIGHT:   Press 'N'                 (Reset to nominal stance)")
     print("  Acrobatic Stunt:")
     print(f"    - 360 BACKFLIP:     Press 'B'                 (Explosive jump, tucked flip & landing) [Repeat: {args.repeat_flips}]")
+    if args.wavy:
+        print("  Terrain Mode:")
+        print("    - WAVY RUNWAY:      Dual offset wave lanes active (180° out-of-phase)!")
+        print("                        Left & Right wheels drive at different heights at different times.")
+        print("                        Active suspension roll leveling keeps chassis level during traversal.")
     print("  Simulation Controls:")
     print("    - POKE / PERTURB:   Right-Click + Drag on robot body in viewer")
     print("    - RESET TO PLATFORM:Backspace key")
@@ -94,19 +150,19 @@ def main():
     print("    - QUIT:             Close window or press Ctrl+C")
     print("=" * 75 + "\n")
 
-    # Balancer gains
-    kp_th = 55.0
-    kd_th = 7.5
-    kp_v = 0.40
-    kd_v = 0.30
-    ki_v = 0.06
-    max_tilt = 0.15
+    # Balancer gains (Ascento-tuned optimal whole-body control)
+    kp_th = 58.0
+    kd_th = 7.8
+    kp_v = 0.35
+    kd_v = 0.12
+    ki_v = 0.08
+    max_tilt = 0.18
 
     # Steering gains
-    kp_yaw = 2.0
-    kd_yaw = 0.30
-    k_roll_bank = 0.38   # rad roll per rad/s yaw rate (interactive keyboard banking)
-    k_knee_diff = 0.20
+    kp_yaw = 2.2
+    kd_yaw = 0.35
+    k_roll_bank = 0.35   # rad roll per rad/s yaw rate (interactive keyboard banking)
+    k_knee_diff = 0.18
 
     # Leg stance & suspension gains
     kp_leg = 70.0
@@ -116,10 +172,41 @@ def main():
     kd_knee_R = 4.5
     kd_knee_L = 3.5
 
+    # Initialize Selected Controller (Ascento Whole-Body QP or acados NMPC)
+    wbc_solver = None
+    if args.controller == "wbc":
+        try:
+            from controllers.wbc import WholeBodyController
+            wbc_solver = WholeBodyController(m)
+            print("[Controller] Ascento Hierarchical Whole-Body QP Active (OSQP, 28 vars, friction cones, dynamics, 1 kHz)")
+        except Exception as e:
+            print(f"[Warning] Could not initialize WholeBodyController ({e}). Falling back to NMPC.")
+            wbc_solver = None
+
+    mpc_lib, mpc_handle, mpc_so_path = load_acados_mpc()
+    if args.controller == "nmpc" or wbc_solver is None:
+        if mpc_lib is not None:
+            print(f"[Controller] acados SQP-RTI Nonlinear MPC Active ({os.path.basename(mpc_so_path)}, 8 states, 3 controls, ~3.8 kHz)")
+            mpc_out_ctrl = (ctypes.c_double * 4)()
+            mpc_solve_time = ctypes.c_double()
+        else:
+            print("[Controller] acados NMPC library not found; using calibrated cascaded balancer.")
+            mpc_out_ctrl = None
+            mpc_solve_time = None
+    else:
+        mpc_out_ctrl = None
+        mpc_solve_time = None
+
     last_sim_time = d.time
     step_count = 0
 
-    v_target = 0.0
+    if args.speed is not None:
+        v_target = args.speed
+    elif args.wavy and args.headless:
+        v_target = 0.35
+    else:
+        v_target = 0.0
+
     yaw_rate_target = 0.0
     v_filtered = 0.0
     yaw_filtered = 0.0
@@ -278,7 +365,7 @@ def main():
                 if not args.headless and d.time < last_sim_time:
                     d.qpos[0] = x_start
                     d.qpos[1] = y_home
-                    d.qpos[2] = 0.1172
+                    d.qpos[2] = z_start
                     d.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
                     d.qpos[7] = 0.0
                     d.qpos[8] = qh_R_nom
@@ -429,12 +516,52 @@ def main():
                 else:
                     v_int = 0.0
 
-                # Cascaded longitudinal pitch reference
-                th_ref = kp_v * (v_fwd - v_filtered) + ki_v * v_int
+                # Ascento-Inspired LQR Balancing Motion Task (Klemm et al. 2020 Eq 36-37)
+                v_err = v_fwd - v_filtered
+                v_int += v_err * dt_sim
+                v_int = float(np.clip(v_int, -0.30, 0.30))
+
+                th_ref = kp_v * v_err + ki_v * v_int
                 th_ref = float(np.clip(th_ref, -max_tilt, max_tilt))
 
                 tau_wheel = - (kp_th * (theta - th_ref) + kd_th * omega_pitch)
-                tau_wheel = float(np.clip(tau_wheel, -15.0, 15.0))
+                tau_wheel = float(np.clip(tau_wheel, -14.0, 14.0))
+
+                tau_roll = 0.0
+                psi_ref = 0.0
+
+                if args.controller == "nmpc" and mpc_lib is not None and not is_backflipping:
+                    # 3D Invariant State Mapping for acados NMPC (Local relative receding horizon)
+                    p_curr = float(d.qpos[1])
+                    v_curr = float(v_fwd)
+                    theta_mpc = - float(theta)
+                    omega_mpc = - float(omega_pitch)
+
+                    qk_avg = 0.5 * ((d.qpos[9] - qk_R_nom) - (d.qpos[13] - qk_L_nom))
+                    l_curr = 0.148 - 0.08 * qk_avg
+                    dl_curr = -0.08 * 0.5 * (d.qvel[8] - d.qvel[12])
+
+                    roll_curr = float(np.arctan2(R[0, 2], R[2, 2]))
+                    roll_rate_curr = float(d.qvel[4])
+
+                    l_target_ref = 0.148 - 0.08 * qk_current
+
+                    mpc_lib.mpc_step(
+                        mpc_handle,
+                        p_curr, v_curr,
+                        theta_mpc, omega_mpc,
+                        l_curr, dl_curr,
+                        roll_curr, roll_rate_curr,
+                        float(v_filtered),
+                        l_target_ref,
+                        float(yaw_filtered),
+                        p_curr,  # Local relative horizon prevents global position runaway
+                        0,
+                        mpc_out_ctrl,
+                        ctypes.byref(mpc_solve_time)
+                    )
+                    tau_roll = mpc_out_ctrl[2]
+                    psi_ref = mpc_out_ctrl[3]
 
                 # Heading regulation
                 if is_multi_flip:
@@ -443,9 +570,15 @@ def main():
                         yaw_heading_err -= 2 * np.pi * np.sign(yaw_heading_err)
                     tau_diff = - (kp_yaw * yaw_heading_err + kd_yaw * omega_yaw)
                     tau_diff = float(np.clip(tau_diff, -2.5, 2.5))
+                elif args.wavy and abs(yaw_rate_target) < 0.05:
+                    # Autonomous lane-keeping on center runway (x_home = 0.0705)
+                    x_err = float(d.qpos[0] - x_home)
+                    yaw_target = float(np.clip(+ 1.2 * x_err, -0.20, 0.20))
+                    yaw_err = yaw_heading - yaw_target
+                    tau_diff = float(np.clip(- (2.8 * yaw_err + 0.40 * omega_yaw), -2.5, 2.5))
                 else:
                     yaw_err = omega_yaw - yaw_filtered
-                    tau_diff = - (0.75 * yaw_err + 0.18 * omega_yaw)
+                    tau_diff = - (kp_yaw * yaw_err + kd_yaw * omega_yaw)
                     tau_diff = float(np.clip(tau_diff, -3.5, 3.5))
 
                 # Actuator Command Generation
@@ -622,38 +755,96 @@ def main():
                         d.ctrl[6] = -kp_leg * (d.qpos[13] - qk_L_nom) - kd_knee_L * d.qvel[12]
                         d.ctrl[7] = 0.5 * tau_wheel + tau_diff
                     else:
-                        # Manual keyboard driving mode: active hip banking and differential knees
-                        alpha_q = min(1.0, 3.0 * dt_sim)
-                        qk_current += alpha_q * (qk_target - qk_current)
-                        # Ascento-inspired ZMP-regulated dynamic curve leaning:
-                        # psi_ref = arctan(v * omega_yaw / g)
-                        a_lat = v_fwd * omega_yaw
-                        psi_ref = float(np.arctan2(a_lat, 9.81))
-                        psi_ref = float(np.clip(psi_ref, -0.35, 0.35))
-                        bank_cmd = k_roll_bank * yaw_filtered + 0.45 * psi_ref
-                        knee_diff_cmd = k_knee_diff * yaw_filtered + 0.25 * psi_ref
-                        q_roll_R_cmd = + bank_cmd
-                        q_roll_L_cmd = - bank_cmd
-                        d_qh_R = -0.515 * qk_current + 0.098 * (qk_current ** 2)
-                        d_qh_L = +0.705 * qk_current - 0.011 * (qk_current ** 2)
-                        qh_R_cmd = qh_R_nom + d_qh_R
-                        qh_L_cmd = qh_L_nom + d_qh_L
-                        qk_R_cmd = qk_R_nom - qk_current - knee_diff_cmd
-                        qk_L_cmd = qk_L_nom + qk_current - knee_diff_cmd
-                        kd_knee_R_man = 9.0 if abs(d.qvel[8]) > 1.2 else kd_knee_R
-                        kd_knee_L_man = 9.0 if abs(d.qvel[12]) > 1.2 else kd_knee_L
+                        if wbc_solver is not None:
+                            # Ascento Hierarchical Whole-Body QP Control
+                            yaw_cmd = float(yaw_filtered)
+                            if args.wavy and abs(yaw_rate_target) < 0.05:
+                                x_err = float(d.qpos[0] - x_home)
+                                yaw_cmd = float(np.clip(- 1.2 * x_err, -0.20, 0.20))
 
-                        d.ctrl[0] = -kp_roll * (d.qpos[7] - q_roll_R_cmd) - kd_roll * d.qvel[6]
-                        d.ctrl[1] = -kp_leg * (d.qpos[8] - qh_R_cmd) - kd_leg * d.qvel[7]
-                        d.ctrl[2] = -kp_leg * (d.qpos[9] - qk_R_cmd) - kd_knee_R_man * d.qvel[8]
-                        d.ctrl[3] = 0.5 * tau_wheel - tau_diff
-                        d.ctrl[4] = -kp_roll * (d.qpos[11] - q_roll_L_cmd) - kd_roll * d.qvel[10]
-                        d.ctrl[5] = -kp_leg * (d.qpos[12] - qh_L_cmd) - kd_leg * d.qvel[11]
-                        d.ctrl[6] = -kp_leg * (d.qpos[13] - qk_L_cmd) - kd_knee_L_man * d.qvel[12]
-                        d.ctrl[7] = 0.5 * tau_wheel + tau_diff
+                            roll_terrain_offset = 0.0
+                            if args.wavy:
+                                roll_now = float(np.arctan2(R[0, 2], R[2, 2]))
+                                roll_rate_now = float(d.qvel[4])
+                                roll_terrain_offset = float(np.clip(- (0.60 * roll_now + 0.05 * roll_rate_now), -0.25, 0.25))
+
+                            delta_h_cmd = - 0.05 * (qk_current / 0.08) if abs(qk_current) > 1e-4 else 0.0
+
+                            tau_wbc, wbc_info = wbc_solver.step(
+                                d,
+                                v_target=float(v_filtered),
+                                yaw_target=yaw_cmd,
+                                delta_h=delta_h_cmd,
+                                roll_target_offset=roll_terrain_offset,
+                                dt=dt_sim
+                            )
+                            d.ctrl[:] = tau_wbc
+                        else:
+                            # Manual keyboard driving mode: active hip banking, differential knees, and hip pitch coordination
+                            alpha_q = min(1.0, 3.0 * dt_sim)
+                            qk_current += alpha_q * (qk_target - qk_current)
+
+                            # Ascento-inspired ZMP-regulated dynamic curve leaning: psi_ref = arctan(v * omega_yaw / g)
+                            a_lat = v_fwd * omega_yaw
+                            psi_zmp = float(np.arctan2(a_lat, 9.81))
+                            bank_cmd = k_roll_bank * yaw_filtered + 0.50 * psi_zmp
+                            knee_diff_cmd = k_knee_diff * yaw_filtered + 0.25 * psi_zmp
+                            roll = float(np.arctan2(R[0, 2], R[2, 2]))
+                            roll_rate = float(d.qvel[4])
+
+                            if args.wavy:
+                                # Active suspension roll leveling and knee compliance for out-of-phase wave lanes
+                                k_roll_hip = 0.75
+                                kd_roll_hip = 0.06
+                                k_knee_diff_terrain = 0.85
+                                kd_knee_diff_terrain = 0.06
+
+                                roll_terrain_cmd = float(np.clip(k_roll_hip * roll + kd_roll_hip * roll_rate, -0.30, 0.30))
+                                q_roll_R_cmd = - roll_terrain_cmd - bank_cmd
+                                q_roll_L_cmd = + roll_terrain_cmd + bank_cmd
+
+                                delta_qk_terrain = float(np.clip(k_knee_diff_terrain * roll + kd_knee_diff_terrain * roll_rate, -0.35, 0.35))
+                                if delta_qk_terrain > 0:
+                                    qk_R_cmd = qk_R_nom - qk_current - knee_diff_cmd + delta_qk_terrain
+                                    qk_L_cmd = qk_L_nom + qk_current - knee_diff_cmd
+                                else:
+                                    qk_R_cmd = qk_R_nom - qk_current - knee_diff_cmd
+                                    qk_L_cmd = qk_L_nom + qk_current - knee_diff_cmd + delta_qk_terrain
+                            else:
+                                q_roll_R_cmd = - bank_cmd
+                                q_roll_L_cmd = + bank_cmd
+                                qk_R_cmd = qk_R_nom - qk_current - knee_diff_cmd
+                                qk_L_cmd = qk_L_nom + qk_current - knee_diff_cmd
+
+                            # Ascento Active Hip Pitch Coordination: dynamically tilt torso into acceleration/braking
+                            k_hip_pitch = 0.40
+                            d_qh_pitch = k_hip_pitch * th_ref
+                            d_qh_R = -0.515 * (qk_R_cmd - qk_R_nom)
+                            d_qh_L = -0.705 * (qk_L_cmd - qk_L_nom)
+                            qh_R_cmd = qh_R_nom + d_qh_pitch + d_qh_R
+                            qh_L_cmd = qh_L_nom - d_qh_pitch + d_qh_L
+                            kd_knee_R_man = 9.0 if abs(d.qvel[8]) > 1.2 else kd_knee_R
+                            kd_knee_L_man = 9.0 if abs(d.qvel[12]) > 1.2 else kd_knee_L
+
+                            d.ctrl[0] = -0.5 * tau_roll - kp_roll * (d.qpos[7] - q_roll_R_cmd) - kd_roll * d.qvel[6]
+                            d.ctrl[1] = -kp_leg * (d.qpos[8] - qh_R_cmd) - kd_leg * d.qvel[7]
+                            d.ctrl[2] = -kp_leg * (d.qpos[9] - qk_R_cmd) - kd_knee_R_man * d.qvel[8]
+                            d.ctrl[3] = 0.5 * tau_wheel - tau_diff
+                            d.ctrl[4] = +0.5 * tau_roll - kp_roll * (d.qpos[11] - q_roll_L_cmd) - kd_roll * d.qvel[10]
+                            d.ctrl[5] = -kp_leg * (d.qpos[12] - qh_L_cmd) - kd_leg * d.qvel[11]
+                            d.ctrl[6] = -kp_leg * (d.qpos[13] - qk_L_cmd) - kd_knee_L_man * d.qvel[12]
+                            d.ctrl[7] = 0.5 * tau_wheel + tau_diff
 
                 mujoco.mj_step(m, d)
                 step_count += 1
+
+                if args.wavy and step_count % 250 == 0:
+                    r_wheel_z = d.xpos[5][2]
+                    l_wheel_z = d.xpos[9][2]
+                    h_diff = l_wheel_z - r_wheel_z
+                    roll_deg = np.degrees(np.arctan2(R[0, 2], R[2, 2]))
+                    ctrl_stat = f" | WBC={wbc_info['solve_time_us']:.0f}µs" if wbc_solver is not None else (f" | MPC={mpc_solve_time.value:.0f}µs" if mpc_lib is not None else "")
+                    print(f"  [WAVY RUNWAY] t={d.time:5.2f}s | Pos X={d.qpos[0]:+.3f}m | Pos Y={d.qpos[1]:+.2f}m | R-wheel Z={r_wheel_z*100:4.1f}cm | L-wheel Z={l_wheel_z*100:4.1f}cm | Diff={h_diff*100:+4.1f}cm | Roll={roll_deg:+5.1f}° | Up-Z={R[2, 2]:.4f}{ctrl_stat}")
 
                 if step_count % 8 == 0:
                     viewer.sync()
@@ -671,6 +862,8 @@ def main():
     except KeyboardInterrupt:
         print("\n[Exit] User interrupted simulation.")
     finally:
+        if mpc_lib is not None and mpc_handle is not None:
+            mpc_lib.mpc_destroy(mpc_handle)
         if log_fp is not None:
             log_fp.close()
             print(f"[Log] Successfully wrote pitch telemetry log to: {args.log_pitch}")

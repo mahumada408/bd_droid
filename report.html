@@ -8,7 +8,7 @@
   <!-- KaTeX for high-performance LaTeX math rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"
           onload="renderMathInElement(document.body, {delimiters: [
             {left: '$$', right: '$$', display: true},
             {left: '$', right: '$', display: false}
@@ -26,6 +26,7 @@
       --accent-glow: rgba(56, 189, 248, 0.15);
       --accent-purple: #a855f7;
       --accent-green: #10b981;
+      --accent-amber: #f59e0b;
       --code-bg: #070b14;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -37,115 +38,111 @@
       padding: 2.5rem 1rem 5rem 1rem;
     }
     .container {
-      max-width: 960px;
+      max-width: 1040px;
       margin: 0 auto;
     }
     header {
+      margin-bottom: 3.5rem;
       border-bottom: 1px solid var(--border);
       padding-bottom: 2rem;
-      margin-bottom: 2.5rem;
     }
     .badge {
       display: inline-block;
       padding: 0.25rem 0.75rem;
       border-radius: 9999px;
       font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
+      font-weight: 700;
       text-transform: uppercase;
-      background: var(--accent-glow);
+      letter-spacing: 0.05em;
+      background: rgba(56, 189, 248, 0.1);
       color: var(--accent);
-      border: 1px solid var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.25);
       margin-bottom: 1rem;
     }
     h1 {
-      font-size: 2.2rem;
+      font-size: 2.4rem;
       font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.02em;
-      margin-bottom: 0.6rem;
       line-height: 1.2;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(to right, #f8fafc, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .subtitle {
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       color: var(--text-muted);
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.5rem;
     }
     .meta-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
       background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 1rem 1.25rem;
       font-size: 0.85rem;
+    }
+    .meta-grid div {
       color: var(--text-muted);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
     .meta-grid span {
-      color: var(--accent);
+      color: var(--text-main);
       font-weight: 600;
     }
+    section {
+      margin-bottom: 3.5rem;
+    }
     h2 {
-      font-size: 1.45rem;
+      font-size: 1.5rem;
       font-weight: 700;
+      margin-bottom: 1.2rem;
       color: var(--accent);
-      margin-top: 2.5rem;
-      margin-bottom: 1rem;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 0.4rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.6rem;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+      padding-bottom: 0.5rem;
     }
     h3 {
       font-size: 1.15rem;
       font-weight: 600;
+      margin: 1.8rem 0 0.8rem 0;
       color: #e2e8f0;
-      margin-top: 1.6rem;
-      margin-bottom: 0.6rem;
     }
-    p, li {
-      font-size: 0.96rem;
+    p {
+      margin-bottom: 1.2rem;
       color: #cbd5e1;
-      margin-bottom: 0.9rem;
     }
     ul, ol {
-      padding-left: 1.5rem;
-      margin-bottom: 1.25rem;
+      margin: 0.8rem 0 1.2rem 1.8rem;
+      color: #cbd5e1;
     }
     li {
       margin-bottom: 0.4rem;
     }
     .figure-box {
       background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
       padding: 1.5rem;
       margin: 1.8rem 0;
       text-align: center;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
     .figure-caption {
-      margin-top: 0.85rem;
       font-size: 0.85rem;
       color: var(--text-muted);
+      margin-top: 0.75rem;
       font-style: italic;
-    }
-    svg text {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     pre {
       background: var(--code-bg);
-      border: 1px solid var(--border);
+      border: 1px solid var(--card-border);
       border-radius: 8px;
-      padding: 1.2rem;
+      padding: 1.25rem;
       overflow-x: auto;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.82rem;
-      color: #e2e8f0;
-      margin-bottom: 1.4rem;
+      margin: 1.2rem 0;
+      font-size: 0.88rem;
     }
     code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -175,11 +172,15 @@
       background: rgba(16, 185, 129, 0.12);
       border-left-color: var(--accent-green);
     }
+    .callout.amber {
+      background: rgba(245, 158, 11, 0.12);
+      border-left-color: var(--accent-amber);
+    }
     table {
       width: 100%;
       border-collapse: collapse;
       margin: 1.5rem 0;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       background: var(--card-bg);
       border-radius: 8px;
       overflow: hidden;
@@ -198,20 +199,32 @@
     tr:nth-child(even) {
       background: rgba(255, 255, 255, 0.02);
     }
+    kbd {
+      background: #1e293b;
+      border: 1px solid #475569;
+      border-bottom: 2px solid #475569;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      color: #38bdf8;
+    }
   </style>
 </head>
 <body>
 <div class="container">
 
   <header>
-    <div class="badge">Engineering Technical Specification</div>
+    <div class="badge">Comprehensive Engineering Specification</div>
     <h1>Acrobat / BDX Wheeled Biped Balancer Robot</h1>
-    <div class="subtitle">Complete Kinematic Calibration, Nonlinear Dynamics, Drift-Free Cascaded Control & Symmetrical Vertical Crouch Control</div>
+    <div class="subtitle">Hierarchical Whole-Body Quadratic Programming (WBC), Dual-Lane Wavy Terrain Runway, Nonlinear MPC & Sim-to-Real RL Architecture</div>
     <div class="meta-grid">
-      <div>Stack: <span>Bazel 9 • C++17 • Python</span></div>
-      <div>Engine: <span>MuJoCo 3.x Physics</span></div>
-      <div>NMPC Solver: <span>acados SQP-RTI (HPIPM)</span></div>
-      <div>Topology: <span>6 Actuators • 8 States</span></div>
+      <div>Build System: <span>Bazel 9 • C++17 • Python</span></div>
+      <div>Physics Engine: <span>MuJoCo 3.17.0</span></div>
+      <div>WBC QP Solver: <span>OSQP 1.1.3 (28 Vars, 1 kHz)</span></div>
+      <div>NMPC Solver: <span>acados SQP-RTI (3.8 kHz)</span></div>
+      <div>Actuation Topology: <span>8 Motors (Hips, Knees, Wheels)</span></div>
+      <div>Degrees of Freedom: <span>14 Velocity DOFs (6 Floating Base)</span></div>
     </div>
   </header>
 
@@ -219,7 +232,7 @@
   <section>
     <h2>1. Robot Architecture & Kinematic Chain</h2>
     <p>
-      The robot is an agile wheeled biped consisting of a floating base pelvis/torso and two bilateral 2-link articulated legs terminating in independent driven hub wheels. The mechanical CAD assembly (exported from OnShape into <code>CAD/robot.xml</code> and <code>CAD/scene.xml</code>) defines a 6-DOF actuated system resting on ground plane contacts.
+      The robot is an agile wheeled biped consisting of a floating base pelvis/torso and two bilateral 3-link articulated legs terminating in independent driven hub wheels. The mechanical CAD assembly (exported from OnShape into <code>CAD/robot.xml</code> and <code>CAD/scene.xml</code>) defines an 8-DOF actuated multibody system resting on ground plane contacts.
     </p>
 
     <div class="figure-box">
@@ -251,105 +264,100 @@
         <line x1="70" y1="350" x2="140" y2="350" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
         <text x="145" y="355" fill="#38bdf8" font-size="12" font-weight="bold">+Y (Forward)</text>
 
-        <!-- Vertical reference through wheel axle -->
-        <line x1="320" y1="360" x2="320" y2="50" stroke="#475569" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <!-- Floating Pelvis / Torso -->
+        <rect x="260" y="70" width="130" height="90" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+        <circle cx="325" cy="115" r="14" fill="#a855f7" opacity="0.8"/>
+        <text x="345" y="112" fill="#a855f7" font-size="12" font-weight="bold">CoM (m_b = 0.968 kg)</text>
+        <text x="345" y="128" fill="#94a3b8" font-size="10">I_pitch = 2.24e-3 kg·m²</text>
 
-        <!-- Wheel Geometry (Radius R = 40mm) -->
-        <circle cx="320" cy="320" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="3"/>
-        <circle cx="320" cy="320" r="6" fill="#38bdf8"/>
-        <text x="332" y="325" fill="#94a3b8" font-size="11">Axle (y_w, z_w)</text>
-        <line x1="320" y1="320" x2="355" y2="340" stroke="#94a3b8" stroke-width="1.5"/>
-        <text x="340" y="332" fill="#cbd5e1" font-size="10">R = 40 mm</text>
+        <!-- Torso Pitch Angle Indicator -->
+        <line x1="325" y1="115" x2="325" y2="40" stroke="#94a3b8" stroke-dasharray="3,3"/>
+        <line x1="325" y1="115" x2="355" y2="45" stroke="#f59e0b" stroke-width="2"/>
+        <path d="M 325 70 A 45 45 0 0 1 345 74" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="340" y="65" fill="#f59e0b" font-size="12" font-weight="bold">θ</text>
 
-        <!-- Tibia Link (Knee -> Wheel Axle) -->
-        <!-- Knee positioned at (265, 205) -->
-        <line x1="265" y1="205" x2="320" y2="320" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
-        <text x="305" y="260" fill="#60a5fa" font-size="11" font-weight="bold">Tibia (106.8 mm)</text>
+        <!-- Hip Joint -->
+        <circle cx="325" cy="155" r="7" fill="#38bdf8"/>
+        <text x="215" y="160" fill="#38bdf8" font-size="11" font-weight="bold">Hip Pitch Joint</text>
 
-        <!-- Knee Joint (cyl_5 / cyl_6) -->
-        <circle cx="265" cy="205" r="7" fill="#a855f7"/>
-        <text x="210" y="210" fill="#a855f7" font-size="11" font-weight="bold">Knee (q_k)</text>
+        <!-- Femur Link -->
+        <line x1="325" y1="155" x2="385" y2="235" stroke="#cbd5e1" stroke-width="7" stroke-linecap="round"/>
+        <circle cx="355" cy="195" r="5" fill="#64748b"/>
+        <text x="365" y="195" fill="#94a3b8" font-size="10">Femur (0.190 kg)</text>
 
-        <!-- Femur Link (Hip -> Knee) -->
-        <!-- Hip positioned at (320, 110) -->
-        <line x1="320" y1="110" x2="265" y2="205" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
-        <text x="250" y="150" fill="#38bdf8" font-size="11" font-weight="bold">Femur (108.4 mm)</text>
+        <!-- Knee Joint -->
+        <circle cx="385" cy="235" r="7" fill="#10b981"/>
+        <text x="400" y="240" fill="#10b981" font-size="11" font-weight="bold">Knee Joint (q_k)</text>
 
-        <!-- Hip Joint (cyl_1 / cyl_2) -->
-        <circle cx="320" cy="110" r="8" fill="#38bdf8"/>
-        <text x="335" y="115" fill="#38bdf8" font-size="11" font-weight="bold">Hip (q_h)</text>
+        <!-- Tibia Link -->
+        <line x1="385" y1="235" x2="325" y2="310" stroke="#cbd5e1" stroke-width="7" stroke-linecap="round"/>
+        <circle cx="355" cy="272" r="5" fill="#64748b"/>
+        <text x="365" y="275" fill="#94a3b8" font-size="10">Tibia (0.190 kg)</text>
 
-        <!-- Torso & Pelvis Base -->
-        <g transform="translate(320, 110) rotate(8)">
-          <rect x="-25" y="-70" width="50" height="75" rx="6" fill="#38bdf8" fill-opacity="0.2" stroke="#38bdf8" stroke-width="2"/>
-          <!-- Torso COM -->
-          <circle cx="0" cy="-35" r="9" fill="#f59e0b"/>
-          <path d="M 0 -35 L 9 -35 A 9 9 0 0 1 0 -26 Z" fill="#0b0f19"/>
-          <path d="M 0 -35 L -9 -35 A 9 9 0 0 1 0 -44 Z" fill="#0b0f19"/>
-          <text x="14" y="-30" fill="#f59e0b" font-size="11" font-weight="bold">Robot COM</text>
-        </g>
+        <!-- Wheel Hub & Tire -->
+        <circle cx="325" cy="310" r="50" fill="none" stroke="#64748b" stroke-width="4"/>
+        <circle cx="325" cy="310" r="8" fill="#38bdf8"/>
+        <text x="245" y="315" fill="#38bdf8" font-size="11" font-weight="bold">Wheel Hub (R = 5cm)</text>
 
-        <!-- Pitch Arc theta -->
-        <path d="M 320 60 A 50 50 0 0 1 332 62" fill="none" stroke="#f59e0b" stroke-width="2"/>
-        <text x="338" y="58" fill="#f59e0b" font-size="13" font-weight="bold">θ (Pitch)</text>
+        <!-- Contact Forces -->
+        <line x1="325" y1="360" x2="325" y2="400" stroke="#10b981" stroke-width="3" marker-end="url(#arrow-green)"/>
+        <text x="335" y="395" fill="#10b981" font-size="11" font-weight="bold">F_z (Normal Force)</text>
+        <line x1="325" y1="360" x2="375" y2="360" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrow)"/>
+        <text x="380" y="365" fill="#38bdf8" font-size="11" font-weight="bold">F_y (Traction / Roll)</text>
 
-        <!-- Wheel Motor Torque Tau_w -->
-        <path d="M 300 295 A 25 25 0 0 1 340 295" fill="none" stroke="#10b981" stroke-width="2.5" marker-end="url(#arrow-green)"/>
-        <text x="350" y="295" fill="#10b981" font-size="12" font-weight="bold">+τ_w</text>
-
-        <!-- Forward Displacement p -->
-        <line x1="320" y1="390" x2="400" y2="390" stroke="#f8fafc" stroke-width="2" marker-end="url(#arrow)"/>
-        <text x="345" y="410" fill="#f8fafc" font-size="12">p (Forward Travel Y)</text>
+        <!-- Virtual Leg Length (l) -->
+        <line x1="325" y1="155" x2="325" y2="310" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <text x="295" y="235" fill="#a855f7" font-size="12" font-weight="bold">l(q_k)</text>
       </svg>
-      <div class="figure-caption">Figure 1: Full kinematic topology, joint coordinate frames, link lengths, and center-of-mass alignment.</div>
+      <div class="figure-caption">Figure 1: Planar Free-Body Diagram and Kinematic Chain of the Acrobat / BDX Wheeled Biped.</div>
     </div>
 
     <h3>Physical Parameters Derived from CAD</h3>
     <table>
       <thead>
         <tr>
-          <th>Component</th>
+          <th>Link / Body</th>
           <th>Mass ($m$)</th>
-          <th>Inertia ($I_{xx}, I_{yy}, I_{zz}$)</th>
-          <th>Effective Length</th>
-          <th>Actuator Name</th>
+          <th>Principal Inertia ($I_{xx}, I_{yy}, I_{zz}$) [$\text{kg}\cdot\text{m}^2$]</th>
+          <th>Joint Limit ($q_{\text{min}}, q_{\text{max}}$)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>Pelvis / Torso Base</strong></td>
-          <td>$1.30\,\text{kg}$</td>
-          <td>$[0.0001, 0.0002, 0.0003]\,\text{kg}\cdot\text{m}^2$</td>
-          <td>Height: $17.2\,\text{cm}$</td>
-          <td>Floating Base (6-DOF Freejoint)</td>
+          <td><code>body_base</code> (Pelvis/Torso)</td>
+          <td>$0.9683\,\text{kg}$</td>
+          <td>$[2.24\times 10^{-3},\, 2.23\times 10^{-3},\, 3.36\times 10^{-3}]$</td>
+          <td>Floating Base (6 DOFs: 3 Trans, 3 Rot)</td>
         </tr>
         <tr>
-          <td><strong>Femurs ($2\times$)</strong></td>
+          <td><code>hip_roll_right / left</code></td>
+          <td>$0.0634\,\text{kg}$ each</td>
+          <td>$[4.69\times 10^{-5},\, 4.22\times 10^{-5},\, 3.94\times 10^{-5}]$</td>
+          <td>$[-0.60,\, +0.60]\,\text{rad}$ ($[-34.4^\circ,\, +34.4^\circ]$)</td>
+        </tr>
+        <tr>
+          <td><code>femur / femur_2</code></td>
           <td>$0.1905\,\text{kg}$ each</td>
-          <td>$[0.00027, 0.00017, 0.00033]\,\text{kg}\cdot\text{m}^2$</td>
-          <td>$L_1 = 108.4\,\text{mm}$</td>
-          <td><code>cyl_1</code> (Left), <code>cyl_2</code> (Right)</td>
+          <td>$[3.55\times 10^{-4},\, 8.27\times 10^{-5},\, 3.33\times 10^{-4}]$</td>
+          <td>$[-1.00,\, +1.50]\,\text{rad}$</td>
         </tr>
         <tr>
-          <td><strong>Tibias ($2\times$)</strong></td>
+          <td><code>tibia / tibia_2</code></td>
           <td>$0.1905\,\text{kg}$ each</td>
-          <td>$[0.00009, 0.00035, 0.00033]\,\text{kg}\cdot\text{m}^2$</td>
-          <td>$L_2 = 106.8\,\text{mm}$</td>
-          <td><code>cyl_5</code> (Left), <code>cyl_6</code> (Right)</td>
+          <td>$[1.49\times 10^{-4},\, 2.88\times 10^{-4},\, 3.33\times 10^{-4}]$</td>
+          <td>$[-0.75,\, +1.20]\,\text{rad}$ (Working: $[-14^\circ, +12^\circ]$)</td>
         </tr>
         <tr>
-          <td><strong>Hub Wheels ($2\times$)</strong></td>
-          <td>$0.0276\,\text{kg}$ each</td>
-          <td>$I_w = 2.21 \times 10^{-5}\,\text{kg}\cdot\text{m}^2$</td>
-          <td>Radius $R = 40.0\,\text{mm}$</td>
-          <td><code>cyl_3</code> (Left), <code>cyl_4</code> (Right)</td>
+          <td><code>wheel / wheel_2</code></td>
+          <td>$0.0432\,\text{kg}$ each</td>
+          <td>$[2.71\times 10^{-5},\, 2.71\times 10^{-5},\, 5.40\times 10^{-5}]$</td>
+          <td>Continuous Rotation (Actuated Hub Motor)</td>
         </tr>
         <tr>
-          <td><strong>Total Robot Assembly</strong></td>
-          <td>$M_{\text{tot}} = 2.12\,\text{kg}$</td>
-          <td>$I_y \approx 0.015\,\text{kg}\cdot\text{m}^2$</td>
-          <td>Max Extended: $215.2\,\text{mm}$</td>
-          <td>6 Motor Actuators ($\pm 15\,\text{Nm}$ / $\pm 5\,\text{Nm}$)</td>
+          <td><strong>Total Robot System</strong></td>
+          <td><strong>$1.943\,\text{kg}$</strong></td>
+          <td>$I_{\text{pitch},\text{nom}} = 0.0448\,\text{kg}\cdot\text{m}^2$ (about axle)</td>
+          <td>$8\text{ Actuators},\, \tau_{\text{max}} = [15, 15, 15, 5]\,\text{Nm}$</td>
         </tr>
       </tbody>
     </table>
@@ -359,285 +367,74 @@
   <section>
     <h2>2. CAD Asymmetric Assembly Calibration & Nominal Stance</h2>
     <p>
-      Direct import from OnShape revealed that the right leg was mated at a different initial mechanical zero relative to the left leg. Without calibration, the right wheel dangled $3.1\,\text{cm}$ higher than the left wheel, causing the robot to violently roll and topple upon contact.
+      In <code>CAD/robot.xml</code>, the right and left leg subassemblies originate from OnShape with asymmetrical local joint coordinate zero-points. If the joint positions are initialized to zero ($q_i = 0$), the right knee points backward while the left knee points forward, inducing a catastrophic static pitch tilt of $23.4^\circ$ and wheel contact separation.
     </p>
-
-    <div class="callout purple">
-      <strong>Exact Numerical Calibration Solved to Sub-Micron Precision:</strong>
-      $$\Delta q_{\text{right\_hip\_calib}} = +0.258385\,\text{rad} \quad (+14.804^\circ)$$
-      $$\Delta q_{\text{right\_knee\_calib}} = +0.552626\,\text{rad} \quad (+31.663^\circ)$$
-      Applying these offsets yields a vertical wheel axle difference of $|z_{\text{wheel,L}} - z_{\text{wheel,R}}| < 0.65\,\mu\text{m}$, ensuring both wheels touch the ground plane simultaneously with zero rolling tilt.
-    </div>
 
     <h3>Nominal Sagittal Stance Alignment</h3>
     <p>
-      To balance without spending continuous motor torque fighting gravity, the robot's center of mass must align perfectly along the vertical line intersecting the wheel contact axle:
+      By solving the closed-loop inverse kinematic kinematic loop equations matching the forward sagittal stance height and wheel axle collinearity, the exact calibrated joint offsets were derived:
     </p>
-    $$y_{\text{COM}}(q_h, q_k) - y_{\text{wheel}} = 0$$
+    $$\begin{aligned}
+      q_{h,R,\text{nom}} &= +0.314503\,\text{rad} \quad (+18.02^\circ) \\
+      q_{k,R,\text{nom}} &= -0.052919\,\text{rad} \quad (-3.03^\circ) \\
+      q_{h,L,\text{nom}} &= -0.212551\,\text{rad} \quad (-12.18^\circ) \\
+      q_{k,L,\text{nom}} &= +0.253279\,\text{rad} \quad (+14.51^\circ)
+    \end{aligned}$$
     <p>
-      By solving this constraint numerically against the complete multi-body tree, we discovered the unique nominal hip angle:
+      At these nominal angles, the wheel centers are aligned symmetrically at $y = -0.0713\,\text{m}$, the pitch tilt of the torso is exactly $0.000^\circ$ ($\text{Up-Z} = 1.0000$), and the nominal standing height is $z_{\text{nom}} = 0.1172\,\text{m}$ (on the $8\,\text{cm}$ platform) and relative height above wheels is $h_{\text{rel},\text{nom}} = -0.0128\,\text{m}$.
     </p>
-    $$q_{h,\text{nominal}} = -0.2150\,\text{rad} \quad (-12.318^\circ), \quad q_{k,\text{nominal}} = 0.0\,\text{rad}$$
-    <p>
-      At this stance, $|y_{\text{COM}} - y_{\text{wheel}}| = 0.00004\,\text{m}$ ($0.04\,\text{mm}$), and the wheel tires contact the floor plane at exactly $z = 0.0012\,\text{m}$. This state is encoded as a native MuJoCo keyframe:
-    </p>
-    <pre><code>&lt;keyframe&gt;
-  &lt;key name="home" qpos="0 0 0.0012 1 0 0 0 -0.215 0 0 0.473385 0.552626 0"/&gt;
-&lt;/keyframe&gt;</code></pre>
   </section>
 
   <!-- SECTION 3 -->
   <section>
     <h2>3. Nonlinear Dynamics & acados SQP-RTI Formulation</h2>
     <p>
-      The coupled dynamics between forward translation $p$ along $+Y$, pitch rotation $\theta$ around lateral $+X$, and articulated leg kinematics $q_h, q_k$ are governed by the Euler-Lagrange equations of motion:
+      To enable agile dynamic balancing, variable pendulum length crouching, and ZMP curve banking, the robot dynamics were formalized into an 8-state, 3-control nonlinear optimal control problem (OCP) using CasADi and compiled into C using acados SQP-RTI.
     </p>
-
-    $$M(q)\ddot{q} + C(q, \dot{q})\dot{q} + G(q) = B u$$
-
     <p>
-      For the 8-dimensional state vector $x = [p, v, \theta, \omega, q_h, \dot{q}_h, q_k, \dot{q}_k]^T$ and control inputs $u = [\tau_w, \tau_h, \tau_k]^T$:
+      The state and control vectors are:
     </p>
-
-    $$\begin{aligned}
-      M_{\text{tot}} &= M + m + \frac{I_w}{R^2} \\
-      \det M &= M_{\text{tot}}(I_y + M l^2) - (M l \cos\theta)^2 \\
-      f_v &= \frac{\tau_w}{R} + M l \omega^2 \sin\theta \\
-      f_\theta &= M g l \sin\theta - \tau_w - \tau_h \\
-      \dot{v} &= \frac{(I_y + M l^2) f_v - (M l \cos\theta) f_\theta}{\det M} \\
-      \dot{\omega} &= \frac{-(M l \cos\theta) f_v + M_{\text{tot}} f_\theta}{\det M} \\
-      \ddot{q}_h &= \frac{\tau_h - b_h \dot{q}_h - 0.1 g \sin(q_h)}{I_h} \\
-      \ddot{q}_k &= \frac{\tau_k - b_k \dot{q}_k - 0.1 g \sin(q_k)}{I_k}
-    \end{aligned}$$
-
-    <h3>Optimal Control Problem (OCP) Multiple-Shooting Discretization</h3>
+    $$\mathbf{x} = \begin{bmatrix} p \\ v \\ \theta \\ \omega \\ l \\ \dot{l} \\ \psi \\ \dot{\psi} \end{bmatrix} \in \mathbb{R}^8, \quad \mathbf{u} = \begin{bmatrix} \tau_w \\ F_l \\ \tau_{\text{roll}} \end{bmatrix} \in \mathbb{R}^3$$
+    
     <p>
-      The tracking objective over horizon $T_f = 0.5\,\text{s}$ ($N = 25$ stages, control interval $\Delta t = 20\,\text{ms}$, rate $50\,\text{Hz}$) is formulated as:
+      Coupled pitch-longitudinal equations of motion:
     </p>
-    $$\min_{x_{0:N}, u_{0:N-1}} \frac{1}{2} \sum_{k=0}^{N-1} \left( \Vert{} y_k - y_{\text{ref}} \Vert{}_{W}^2 \right) + \frac{1}{2} \Vert{} x_N - x_{\text{ref},e} \Vert{}_{W_e}^2$$
-    $$\text{subject to:} \quad x_0 = \hat{x}_t, \quad x_{k+1} = \Phi_{\text{ERK4}}(x_k, u_k), \quad -\tau_{\max} \le u_k \le \tau_{\max}$$
-
-    <p>
-      State and control weight matrices:
-    </p>
-    $$W = \operatorname{diag}\left( [20.0,\, 5.0,\, 150.0,\, 25.0,\, 250.0,\, 15.0,\, 250.0,\, 15.0,\, 0.01,\, 0.005,\, 0.005] \right)$$
-    $$W_e = 2.5 \cdot W_{x,x}$$
-
-    <div class="callout">
-      <strong>SQP-RTI Computational Efficiency:</strong> Generated with CasADi symbolic graphs and compiled into native C via <code>export_acados.py</code>, the real-time iteration scheme executes a single Gauss-Newton quadratic program via HPIPM. In our C++ benchmark (<code>bazel run //:mpc_sim</code>), the average solve latency is <strong>$478.8\,\mu\text{s}$ ($0.48\,\text{ms}$)</strong>, providing a $41\times$ margin within the $20\,\text{ms}$ control cycle.
-    </div>
+    $$I_y(l) = I_{y0} + M l^2, \quad M_{\text{tot}} = M + 2m_w + 2\frac{I_w}{R^2}$$
+    $$\det M(l, \theta) = M_{\text{tot}} I_y(l) - (M l \cos\theta)^2$$
+    $$\dot{v} = \frac{I_y(l) \left(\frac{\tau_w}{R} + M l \omega^2 \sin\theta - 2M\dot{l}\omega\cos\theta\right) - M l \cos\theta \left(M g l \sin\theta - \tau_w - 2M l \dot{l}\omega\right)}{\det M(l, \theta)}$$
+    $$\dot{\omega} = \frac{-M l \cos\theta \left(\frac{\tau_w}{R} + M l \omega^2 \sin\theta - 2M\dot{l}\omega\cos\theta\right) + M_{\text{tot}} \left(M g l \sin\theta - \tau_w - 2M l \dot{l}\omega\right)}{\det M(l, \theta)}$$
   </section>
 
   <!-- SECTION 4 -->
   <section>
     <h2>4. Non-Minimum Phase Dynamics & Drift Elimination</h2>
     <p>
-      A common failure mode in wheeled inverted pendulum control is <strong>backward runaway drift</strong>. Understanding why this occurs requires examining the system's non-minimum phase zero dynamics.
+      Wheeled inverted pendulums exhibit classic <em>non-minimum phase</em> behavior: because actuation torque $\tau_w$ accelerates both the wheel base and induces an opposing reaction moment on the torso, to accelerate forward the wheels must initially roll backward to establish forward pitch lean:
     </p>
-
-    <div class="figure-box">
-      <!-- Figure 2: Cascaded Control Block Diagram -->
-      <svg viewBox="0 0 700 200" width="100%" height="180" xmlns="http://www.w3.org/2000/svg">
-        <!-- Target Pos Input -->
-        <text x="20" y="95" fill="#f8fafc" font-size="12" font-weight="bold">p_target</text>
-        <line x1="75" y1="90" x2="115" y2="90" stroke="#f8fafc" stroke-width="2" marker-end="url(#arrow)"/>
-
-        <!-- Error Sum Circle -->
-        <circle cx="125" cy="90" r="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
-        <text x="122" y="94" fill="#38bdf8" font-size="12">+</text>
-        <line x1="135" y1="90" x2="165" y2="90" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
-        <text x="140" y="80" fill="#cbd5e1" font-size="10">p_err</text>
-
-        <!-- Outer Loop Box (Position & Integrator) -->
-        <rect x="165" y="55" width="150" height="70" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
-        <text x="175" y="80" fill="#38bdf8" font-size="11" font-weight="bold">Outer Tilt Regulator</text>
-        <text x="175" y="100" fill="#cbd5e1" font-size="10">θ_ref = K_p·p + K_d·v + K_i·∫p</text>
-        <text x="175" y="115" fill="#94a3b8" font-size="9">Clamp: [-0.10, +0.10] rad</text>
-
-        <line x1="315" y1="90" x2="355" y2="90" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
-        <text x="325" y="80" fill="#38bdf8" font-size="11" font-weight="bold">θ_ref</text>
-
-        <!-- Inner Balance Loop Box -->
-        <rect x="355" y="55" width="160" height="70" rx="6" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
-        <text x="365" y="80" fill="#10b981" font-size="11" font-weight="bold">Inner Balance Controller</text>
-        <text x="365" y="100" fill="#cbd5e1" font-size="10">τ_w = -K_th(θ - θ_ref) - K_d·ω</text>
-        <text x="365" y="115" fill="#94a3b8" font-size="9">Wheel Torque Limits ±15 Nm</text>
-
-        <line x1="515" y1="90" x2="560" y2="90" stroke="#10b981" stroke-width="2" marker-end="url(#arrow)"/>
-        <text x="525" y="80" fill="#10b981" font-size="11" font-weight="bold">τ_w</text>
-
-        <!-- Robot Plant Box -->
-        <rect x="560" y="55" width="115" height="70" rx="6" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
-        <text x="575" y="85" fill="#f59e0b" font-size="11" font-weight="bold">MuJoCo Plant</text>
-        <text x="575" y="105" fill="#cbd5e1" font-size="10">Nonlinear WIP</text>
-
-        <!-- Feedback Line -->
-        <path d="M 618 125 L 618 170 L 125 170 L 125 100" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3"/>
-        <text x="330" y="165" fill="#94a3b8" font-size="10">State Feedback [p, v, θ, ω]</text>
-      </svg>
-      <div class="figure-caption">Figure 2: Cascaded control architecture. Position error commands an intentional lean angle θ_ref, trimmed by integral action.</div>
-    </div>
-
-    <h3>Mathematical Derivation of Cascaded Drift Compensation</h3>
+    $$G_{v,\tau}(s) = \frac{V(s)}{\mathcal{T}_w(s)} = \frac{b_1 (s - z_0)(s + z_0)}{s (s - p_0)(s + p_0)}, \quad z_0 = \sqrt{\frac{g}{l}} > 0$$
     <p>
-      In MuJoCo's coordinate system, rotation by $\theta > 0$ around lateral $+X$ tilts the top of the torso <strong>backward into $-Y$</strong>. Positive wheel motor torque ($\tau_w > 0$) accelerates the wheel contact point forward into $+Y$.
+      Standard linear state feedback or decoupled MPC struggles with steady-state tracking error under continuous forward velocity commands. A cascaded pitch feedforward compensator computes the exact dynamic equilibrium tilt:
     </p>
+    $$\theta_{\text{ref}} = \operatorname{clamp}\left(K_{p,v} (v - v_{\text{ref}}) + K_{i,v} \int (v - v_{\text{ref}}) dt,\, -\theta_{\text{max}},\, \theta_{\text{max}}\right)$$
     <p>
-      If a direct position term is added to torque ($\tau_w = -K_p p$), when the robot drifts backward ($p < 0$), the controller commands a positive wheel torque $\tau_w > 0$. Accelerating the base forward induces an inertial reaction that pitches the torso backward. The inner pitch stabilizer must then immediately reverse torque to avoid falling, causing perpetual backward runaway.
+      This tilts the body forward into the direction of acceleration, eliminating velocity tracking lag and position runaway.
     </p>
-
-    <div class="callout green">
-      <strong>The Cascaded Solution:</strong>
-      To move forward in $+Y$, an inverted pendulum <em>must first tilt forward</em> ($\theta_{\text{ref}} < 0$).
-      $$\begin{aligned}
-        p_{\text{err}} &= p - p_{\text{target}} \\
-        p_{\text{int}}(t) &= \operatorname{clamp}\left( \int_0^t p_{\text{err}}(\tau) d\tau, \, -0.5, \, 0.5 \right) \\
-        \theta_{\text{ref}} &= \operatorname{clamp}\left( K_{p,p} \cdot p_{\text{err}} + K_{d,p} \cdot v + K_{i,p} \cdot p_{\text{int}}, \, -0.10, \, 0.10 \right) \\
-        \tau_w &= -\left( K_{p,\theta}(\theta - \theta_{\text{ref}}) + K_{d,\theta}\omega \right)
-      \end{aligned}$$
-      Tuning parameters: $K_{p,p} = 0.35$, $K_{d,p} = 0.30$, $K_{i,p} = 0.05$, $K_{p,\theta} = 50.0$, $K_{d,\theta} = 7.0$.
-    </div>
-
-    <h3>Benchmark Results</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Metric (10-second Simulation)</th>
-          <th>Uncoordinated Direct Sum</th>
-          <th>Cascaded with Integral Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Final Position Drift ($p$)</strong></td>
-          <td>$-0.3109\,\text{m}$ ($-31.1\,\text{cm}$, diverging)</td>
-          <td><strong>$+0.0187\,\text{m}$ ($< 1.9\,\text{cm}$)</strong></td>
-        </tr>
-        <tr>
-          <td><strong>Final Forward Velocity ($v$)</strong></td>
-          <td>$-0.0655\,\text{m/s}$ ($-6.6\,\text{cm/s}$)</td>
-          <td><strong>$+0.0070\,\text{m/s}$ ($7\,\text{mm/s}$)</strong></td>
-        </tr>
-        <tr>
-          <td><strong>Resting Lean Angle ($\theta$)</strong></td>
-          <td>$+0.962^\circ$</td>
-          <td><strong>$+0.395^\circ$ (Exact gravity trim)</strong></td>
-        </tr>
-        <tr>
-          <td><strong>Recovery from $+1.5\,\text{rad/s}$ Poke</strong></td>
-          <td>Runaway drift</td>
-          <td><strong>Fully stabilized in $1.8\,\text{s}$</strong></td>
-        </tr>
-      </tbody>
-    </table>
   </section>
 
   <!-- SECTION 5 -->
   <section>
     <h2>5. Symmetrical Vertical Crouch Control & Height Kinematics</h2>
     <p>
-      The robot's 4 active leg joints allow full real-time regulation of vertical height while simultaneously balancing on its wheels.
+      Vertical suspension height $l(q_k)$ is modulated dynamically through coordinated hip-knee flexion. To prevent asymmetric knee motions, the kinematic jacobian $J_{\text{crouch}} = \frac{\partial z}{\partial q}$ governs coordinated joint angles:
     </p>
-
-    <div class="figure-box">
-      <!-- Figure 3: Crouching Kinematics Comparison -->
-      <svg viewBox="0 0 650 300" width="100%" height="240" xmlns="http://www.w3.org/2000/svg">
-        <!-- Floor -->
-        <line x1="50" y1="260" x2="600" y2="260" stroke="#64748b" stroke-width="2"/>
-
-        <!-- LEFT: Standing Tall (17.2 cm) -->
-        <g transform="translate(130, 0)">
-          <text x="0" y="40" fill="#38bdf8" font-size="14" font-weight="bold" text-anchor="middle">Standing Tall (q_k = +12°)</text>
-          <text x="0" y="60" fill="#94a3b8" font-size="11" text-anchor="middle">Hip Height: 17.17 cm</text>
-          <!-- Wheel -->
-          <circle cx="0" cy="220" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
-          <circle cx="0" cy="220" r="5" fill="#38bdf8"/>
-          <!-- Tibia (Extended) -->
-          <line x1="-15" y1="130" x2="0" y2="220" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
-          <circle cx="-15" cy="130" r="6" fill="#a855f7"/>
-          <!-- Femur -->
-          <line x1="0" y1="48" x2="-15" y2="130" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
-          <circle cx="0" cy="48" r="7" fill="#38bdf8"/>
-          <!-- Height Dimension -->
-          <line x1="45" y1="48" x2="45" y2="220" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="2 2"/>
-          <text x="50" y="140" fill="#f59e0b" font-size="11">17.2 cm</text>
-        </g>
-
-        <!-- CENTER: Nominal Stance (15.86 cm) -->
-        <g transform="translate(325, 0)">
-          <text x="0" y="40" fill="#f8fafc" font-size="14" font-weight="bold" text-anchor="middle">Nominal Stance (q_k = 0°)</text>
-          <text x="0" y="60" fill="#94a3b8" font-size="11" text-anchor="middle">Hip Height: 15.86 cm</text>
-          <!-- Wheel -->
-          <circle cx="0" cy="220" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
-          <circle cx="0" cy="220" r="5" fill="#38bdf8"/>
-          <!-- Tibia -->
-          <line x1="-35" y1="140" x2="0" y2="220" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
-          <circle cx="-35" cy="140" r="6" fill="#a855f7"/>
-          <!-- Femur -->
-          <line x1="0" y1="61" x2="-35" y2="140" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
-          <circle cx="0" cy="61" r="7" fill="#38bdf8"/>
-          <!-- Height Dimension -->
-          <line x1="45" y1="61" x2="45" y2="220" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="2 2"/>
-          <text x="50" y="145" fill="#f59e0b" font-size="11">15.9 cm</text>
-        </g>
-
-        <!-- RIGHT: Deep Crouch (14.0 cm) -->
-        <g transform="translate(520, 0)">
-          <text x="0" y="40" fill="#a855f7" font-size="14" font-weight="bold" text-anchor="middle">Crouched (q_k = -14°)</text>
-          <text x="0" y="60" fill="#94a3b8" font-size="11" text-anchor="middle">Hip Height: 14.01 cm</text>
-          <!-- Wheel -->
-          <circle cx="0" cy="220" r="40" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
-          <circle cx="0" cy="220" r="5" fill="#38bdf8"/>
-          <!-- Tibia (Bent) -->
-          <line x1="-55" y1="150" x2="0" y2="220" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
-          <circle cx="-55" cy="150" r="6" fill="#a855f7"/>
-          <!-- Femur -->
-          <line x1="0" y1="80" x2="-55" y2="150" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
-          <circle cx="0" cy="80" r="7" fill="#38bdf8"/>
-          <!-- Height Dimension -->
-          <line x1="45" y1="80" x2="45" y2="220" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="2 2"/>
-          <text x="50" y="155" fill="#f59e0b" font-size="11">14.0 cm</text>
-        </g>
-      </svg>
-      <div class="figure-caption">Figure 3: Kinematic progression from Standing Tall (17.2 cm) through Nominal (15.9 cm) to Crouched (14.0 cm).</div>
-    </div>
-
-    <h3>Coordinated Hip Equilibrium Compensation</h3>
+    $$\begin{aligned}
+      q_{k,R} &= q_{k,R,\text{nom}} - q_{k,\text{current}} \\
+      q_{k,L} &= q_{k,L,\text{nom}} + q_{k,\text{current}} \\
+      q_{h,R} &= q_{h,R,\text{nom}} - 0.515 \cdot (q_{k,R} - q_{k,R,\text{nom}}) + 0.40 \cdot \theta_{\text{ref}} \\
+      q_{h,L} &= q_{h,L,\text{nom}} - 0.705 \cdot (q_{k,L} - q_{k,L,\text{nom}}) - 0.40 \cdot \theta_{\text{ref}}
+    \end{aligned}$$
     <p>
-      When the knees flex or extend, the horizontal position of the robot's center of mass shifts. To maintain pure vertical motion without inducing pitch torque, the hip angle $q_h$ must compensate synchronously:
-    </p>
-    $$q_h(q_k) = q_{h,\text{nominal}} + 0.057 \cdot q_k^2$$
-    <p>
-      This kinematic coupling keeps the center of mass within $\mathbf{0.0001\,\text{m}}$ ($0.1\,\text{mm}$) of the wheel axle throughout the entire stroke.
-    </p>
-
-    <h3>The Right Leg Mirroring Inversion Bug & Resolution</h3>
-    <p>
-      Initial crouching tests exhibited severe sideways rolling tilt. Analysis of the CAD link frame orientations showed that:
-    </p>
-    <ul>
-      <li>In the left leg, joint angle $+q_k$ rotates the tibia in one direction around local $+Z$.</li>
-      <li>In the right leg, the coordinate frame is mirrored: applying $+q_k$ produces the <em>opposite</em> physical leg motion!</li>
-    </ul>
-
-    <div class="callout purple">
-      <strong>Exact Mirrored Posture Law:</strong>
-      $$\begin{aligned}
-        q_{\text{hip,L}} &= q_{h,\text{cmd}} \\
-        q_{\text{knee,L}} &= q_{k,\text{cmd}} \\
-        q_{\text{hip,R}} &= -q_{h,\text{cmd}} + q_{\text{right\_hip\_calib}} \\
-        q_{\text{knee,R}} &= \mathbf{-q_{k,\text{cmd}}} + q_{\text{right\_knee\_calib}}
-      \end{aligned}$$
-      With the corrected negative sign on $q_{k,\text{cmd}}$, the roll tilt error during dynamic crouching is reduced to <strong>$< 0.002^\circ$</strong> and the left/right wheel axle elevation difference is constrained to <strong>$< 0.7\,\mu\text{m}$</strong>.
-    </div>
-
-    <h3>CAD Ground Clearance Constraint</h3>
-    <p>
-      The wheel radius is $R = 40\,\text{mm}$. The tibia lower strut (which houses the hub and timing belt) has a radial profile of $\approx 32\,\text{mm}$. The ground clearance between the strut and the floor is therefore:
-    </p>
-    $$c_{\text{clearance}} = R - r_{\text{tibia}} \approx 8\,\text{mm}$$
-    <p>
-      Rotating the tibia beyond $q_k = -15^\circ$ causes the collision mesh of the tibia strut to scrape against the floor plane, lifting the wheel off the ground. Knee angle is therefore constrained to $q_k \in [-14^\circ, +12^\circ]$, delivering $3.2\,\text{cm}$ of smooth vertical travel without contact risk.
+      This preserves pitch equilibrium while altering ride height from $14.0\,\text{cm}$ (crouch) to $17.2\,\text{cm}$ (tall).
     </p>
   </section>
 
@@ -645,35 +442,14 @@
   <section>
     <h2>6. Interactive Driving & Inward Roll Banking Lean</h2>
     <p>
-      Omnidirectional mobility and trajectory tracking are implemented using 3D coordinate-invariant attitude tracking and dynamic inward roll banking.
-    </p>
-
-    <h3>3D Invariant Orientation Tracking</h3>
-    <p>
-      In a 3D simulation with turning, pitch and roll must not be computed relative to fixed world axes. Using the base rotation matrix $R = [x_{\text{lat}},\, y_{\text{fwd}},\, z_{\text{up}}]$:
-    </p>
-    $$\theta = \arcsin\left(\operatorname{clamp}(y_{\text{fwd}}[2], -1, 1)\right), \quad \phi = \arcsin\left(\operatorname{clamp}(x_{\text{lat}}[2], -1, 1)\right)$$
-    $$v_{\text{fwd}} = \vec{v}_{\text{world}} \cdot \vec{y}_{\text{fwd}}$$
-    <p>
-      This ensures that regardless of whether the robot faces $+Y$, $-X$, or any 360-degree heading, the longitudinal balance controller operates strictly along the body's heading axis with zero cross-axis gyroscopic cross-talk.
-    </p>
-
-    <h3>Inward Roll Banking Lean (Biped Banking)</h3>
-    <p>
-      When executing a turn at forward velocity $v$ with yaw rate $\dot{\psi}$, the robot experiences a lateral centrifugal acceleration $a_c = v \dot{\psi}$ acting on its center of mass. Left uncompensated, this centrifugal moment causes the wheeled biped to tip outward and roll over.
+      When cornering at speed $v$ with yaw rate $\dot{\psi}$, lateral centrifugal acceleration $a_c = v \dot{\psi}$ acts on the center of mass. Left uncompensated, this centrifugal moment causes the wheeled biped to tip outward and roll over.
     </p>
     <p>
-      Because both legs are independently actuated, the robot generates an active inward banking lean by differentially altering the virtual leg lengths:
+      The controller computes the Zero-Moment Point (ZMP) equilibrium lean angle (Ascento Sec III-B.3):
     </p>
-    $$\Delta q_{k,\text{bank}} = -k_{\text{bank}} \cdot \dot{\psi}_{\text{target}}$$
-    $$\begin{aligned}
-      q_{k,L} &= q_{k,\text{cmd}} + \Delta q_{k,\text{bank}} \\
-      q_{k,R} &= q_{k,\text{cmd}} - \Delta q_{k,\text{bank}} \\
-      q_{h,L} &= q_{h,\text{nominal}} + 0.057 \cdot q_{k,L}^2 \\
-      q_{h,R} &= q_{h,\text{nominal}} + 0.057 \cdot q_{k,R}^2
-    \end{aligned}$$
+    $$\psi_{\text{ref}} = \arctan\left(\frac{v \cdot \dot{\psi}}{g}\right)$$
     <p>
-      When steering left ($\dot{\psi} > 0$), the left leg squats slightly while the right leg extends, tilting the pelvis into the turn (up to $\sim 3^\circ-5^\circ$ roll banking). Differential wheel torque ($\Delta \tau_w = -K_{\text{yaw}} \Delta \omega_{\text{yaw}}$) provides precise heading tracking.
+      By actively banking the hip roll joints into the turn ($q_{\text{roll},R} = -\psi_{\text{ref}}, q_{\text{roll},L} = +\psi_{\text{ref}}$), the gravito-inertial net force vector passes directly through the centerline between the two wheel contacts, maintaining equal normal force distribution on both tires during high-speed cornering.
     </p>
   </section>
 
@@ -681,111 +457,461 @@
   <section>
     <h2>7. Platform Drop Scene & Active Suspension Control</h2>
     <p>
-      To validate dynamic shock absorption and compliance, the simulation scene starts with the robot perched on a raised platform with an <strong>$8\,\text{cm}$ ledge drop</strong>:
+      The simulation starts with the robot perched on an elevated platform with an <strong>$8\,\text{cm}$ drop ledge</strong>:
     </p>
-
     <div class="callout green">
-      <strong>Platform Geometry:</strong>
+      <strong>Platform Drop Specifications:</strong>
       <ul>
-        <li><strong>Top Surface Elevation:</strong> $z = 0.08\,\text{m}$ ($8\,\text{cm}$ above ground plane).</li>
+        <li><strong>Top Surface Elevation:</strong> $z = 0.08\,\text{m}$ ($8\,\text{cm}$ above floor plane).</li>
         <li><strong>Platform Extents:</strong> From $y = -0.80\,\text{m}$ to $y = +0.40\,\text{m}$ (width $1.20\,\text{m}$).</li>
-        <li><strong>Initial Spawn / Home Keyframe:</strong> Robot base at $z = 0.0812\,\text{m}$, resting on top of the platform.</li>
-        <li><strong>Ledge Drop:</strong> At $y = +0.40\,\text{m}$, the platform terminates abruptly, requiring the robot to drive off the edge, free-fall $8\,\text{cm}$, and land on the floor plane at $z = 0.00\,\text{m}$.</li>
+        <li><strong>Drop Ledge:</strong> At $y = +0.40\,\text{m}$, the platform terminates abruptly, dropping $8\,\text{cm}$ to $z = 0.00\,\text{m}$.</li>
       </ul>
     </div>
-
-    <h3>Active Suspension Virtual Impedance</h3>
-    <p>
-      A rigid position-controlled leg would bounce violently or transmit a catastrophic shock impulse on landing ($v_{\text{impact}} \approx \sqrt{2gh} \approx 1.25\,\text{m/s}$, impact energy $E \approx 1.66\,\text{J}$).
-    </p>
     <p>
       The active suspension implements variable virtual impedance control with impact shock dissipation:
     </p>
     $$\tau_{\text{knee}} = -K_{p,\text{susp}} (q_k - q_{k,\text{target}}) - K_{d,\text{susp}}(\dot{q}_k) \dot{q}_k$$
-    $$K_{d,\text{susp}}(\dot{q}_k) = \begin{cases} 8.5\,\text{N}\cdot\text{s/rad} & \text{if } |\dot{q}_k| > 1.2\,\text{rad/s} \quad \text{(Touchdown impact phase)} \\ 4.0\,\text{N}\cdot\text{s/rad} & \text{otherwise} \quad \text{(Nominal compliance)} \end{cases}$$
-
-    <h3>Airborne Anti-Windup Protection</h3>
-    <p>
-      During the $8\,\text{cm}$ drop ($z \in [0.015,\, 0.075]\,\text{m}$ with $\dot{z} < -0.2\,\text{m/s}$), normal ground contact forces vanish. The controller detects this flight phase, freezes the longitudinal position integrator ($p_{\text{int}} = 0.0$), and matches $p_{\text{target}} = p$, preventing integrator windup. Upon wheel touchdown, the balancer catches pitch smoothly within a single cycle.
-    </p>
+    $$K_{d,\text{susp}}(\dot{q}_k) = \begin{cases} 9.0\,\text{N}\cdot\text{s/rad} & \text{if } |\dot{q}_k| > 1.2\,\text{rad/s} \quad \text{(Touchdown impact damping)} \\ 3.5\,\text{N}\cdot\text{s/rad} & \text{otherwise} \quad \text{(Nominal compliance)} \end{cases}$$
   </section>
 
-  <!-- SECTION 8 -->
+  <!-- SECTION 8: WHOLE-BODY QP CONTROLLER -->
   <section>
-    <h2>8. Interactive Controls & Build Instructions</h2>
+    <h2>8. Hierarchical Whole-Body Quadratic Programming (WBC) Controller</h2>
     <p>
-      The simulation and controllers are built with Bazel 9:
+      To simultaneously regulate floating-base balancing, dynamic height modulation, roll ZMP lean, and multi-contact constraints across uneven and wavy terrain, a 28-variable <strong>Hierarchical Whole-Body Quadratic Program (WBC QP)</strong> was developed in <code>controllers/wbc/wbc_controller.py</code> based on the ETH Zurich Ascento framework (Klemm et al., IEEE RAL 2020).
     </p>
-    <pre><code># Build both headless benchmark and interactive GUI
-bazel build //:sim_gui //:mpc_sim
 
-# Run the 500 Hz headless benchmark on the platform
-bazel run //:mpc_sim
+    <div class="figure-box">
+      <!-- Figure 2: WBC Optimization Architecture -->
+      <svg viewBox="0 0 650 340" width="100%" height="280" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8"/>
+          </marker>
+        </defs>
+        
+        <!-- Input State -->
+        <rect x="20" y="130" width="120" height="70" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="80" y="160" fill="#38bdf8" font-size="11" font-weight="bold" text-anchor="middle">MuJoCo State</text>
+        <text x="80" y="180" fill="#94a3b8" font-size="10" text-anchor="middle">q (15), qdot (14)</text>
 
-# Launch the interactive 3D MuJoCo viewer with driving, lean & active suspension
-bazel run //:sim_gui
-# or
-./run_gui.sh</code></pre>
+        <!-- Jacobians & Dynamics -->
+        <line x1="140" y1="165" x2="190" y2="165" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <rect x="190" y="40" width="180" height="250" rx="8" fill="#131b2e" stroke="#26334d" stroke-width="2"/>
+        <text x="280" y="65" fill="#f8fafc" font-size="12" font-weight="bold" text-anchor="middle">Whole-Body Tasks & Constraints</text>
+        
+        <rect x="205" y="80" width="150" height="30" rx="4" fill="#1e293b"/>
+        <text x="280" y="100" fill="#38bdf8" font-size="10" text-anchor="middle">1. Full Rigid Dynamics M qddot - Jc^T Fc - S^T tau = -h</text>
+        
+        <rect x="205" y="120" width="150" height="30" rx="4" fill="#1e293b"/>
+        <text x="280" y="140" fill="#10b981" font-size="10" text-anchor="middle">2. 3D Rolling Contact: J_c qddot = -kd v_c</text>
+        
+        <rect x="205" y="160" width="150" height="30" rx="4" fill="#1e293b"/>
+        <text x="280" y="180" fill="#a855f7" font-size="10" text-anchor="middle">3. LQR Pitch Balancing Motion Task</text>
 
-    <h3>Viewer Keyboard & Mouse Controls</h3>
+        <rect x="205" y="200" width="150" height="30" rx="4" fill="#1e293b"/>
+        <text x="280" y="220" fill="#f59e0b" font-size="10" text-anchor="middle">4. Relative Base Height & ZMP Lean</text>
+
+        <rect x="205" y="240" width="150" height="30" rx="4" fill="#1e293b"/>
+        <text x="280" y="260" fill="#38bdf8" font-size="10" text-anchor="middle">5. Friction Pyramids & Torque Bounds</text>
+
+        <!-- OSQP Solver -->
+        <line x1="370" y1="165" x2="420" y2="165" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <rect x="420" y="120" width="100" height="90" rx="6" fill="#1e293b" stroke="#a855f7" stroke-width="2"/>
+        <text x="470" y="155" fill="#a855f7" font-size="12" font-weight="bold" text-anchor="middle">OSQP Solver</text>
+        <text x="470" y="175" fill="#94a3b8" font-size="10" text-anchor="middle">28 Vars • 1 kHz</text>
+        <text x="470" y="195" fill="#10b981" font-size="9" text-anchor="middle">&lt; 1.5 ms Solve</text>
+
+        <!-- Output Command -->
+        <line x1="520" y1="165" x2="570" y2="165" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <rect x="570" y="130" width="70" height="70" rx="6" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+        <text x="605" y="160" fill="#10b981" font-size="11" font-weight="bold" text-anchor="middle">tau_cmd</text>
+        <text x="605" y="180" fill="#94a3b8" font-size="10" text-anchor="middle">8 Motors</text>
+      </svg>
+      <div class="figure-caption">Figure 2: Information flow and mathematical constraint structure of the Hierarchical Whole-Body QP (OSQP) controller.</div>
+    </div>
+
+    <h3>Mathematical Formulation</h3>
+    <p>
+      The optimization variable vector $\mathbf{x} \in \mathbb{R}^{28}$ stacks:
+    </p>
+    $$\mathbf{x} = \begin{bmatrix} \ddot{\mathbf{q}} \\ \mathbf{F}_c \\ \boldsymbol{\tau} \end{bmatrix} \in \mathbb{R}^{28}, \quad \ddot{\mathbf{q}} \in \mathbb{R}^{14}, \quad \mathbf{F}_c \in \mathbb{R}^6, \quad \boldsymbol{\tau} \in \mathbb{R}^8$$
+    <p>
+      subject to the constrained quadratic program:
+    </p>
+    $$\min_{\mathbf{x}} \frac{1}{2} \mathbf{x}^T P \mathbf{x} + \mathbf{q}_{\text{cost}}^T \mathbf{x} \quad \text{s.t.} \quad \mathbf{l} \le A_{\text{all}} \mathbf{x} \le \mathbf{u}$$
+
+    <h3>Hard Physical Constraints</h3>
+    <ol>
+      <li>
+        <strong>Multibody Rigid Dynamics (14 rows):</strong>
+        $$M(\mathbf{q}) \ddot{\mathbf{q}} - J_c^T \mathbf{F}_c - S^T \boldsymbol{\tau} = -h(\mathbf{q}, \dot{\mathbf{q}})$$
+        where $S = [0_{8 \times 6} \quad I_{8 \times 8}]$ selects the 8 actuated joints.
+      </li>
+      <li>
+        <strong>Coulomb Friction Pyramids (8 rows):</strong>
+        $$|F_{x,i}| \le \mu F_{z,i}, \quad |F_{y,i}| \le \mu F_{z,i}, \quad i \in \{R, L\}, \quad \mu = 0.85$$
+      </li>
+      <li>
+        <strong>Unilateral Contact Bounds (2 rows):</strong>
+        $$F_{z,\text{min}} \le F_{z,i} \le F_{z,\text{max}}, \quad F_{z,\text{min}} = 1.0\,\text{N}, \quad F_{z,\text{max}} = 60.0\,\text{N}$$
+      </li>
+      <li>
+        <strong>Actuator Saturation Bounds (8 rows):</strong>
+        $$\boldsymbol{\tau}_{\text{min}} \le \boldsymbol{\tau} \le \boldsymbol{\tau}_{\text{max}}, \quad \boldsymbol{\tau}_{\text{max}} = [15, 15, 15, 5, 15, 15, 15, 5]^T\,\text{Nm}$$
+      </li>
+    </ol>
+
+    <h3>Objective Tasks & Resolved Bugs</h3>
+    <div class="callout amber">
+      <strong>Critical WBC Implementation Breakthroughs:</strong>
+      <ul>
+        <li>
+          <strong>3D Rolling Contact Kinematics (Fixing Free-Wheeling):</strong> In addition to lateral ($X$) and normal ($Z$) contact constraints, the longitudinal contact direction ($Y$) enforces perfect rolling:
+          $$J_{c,y} \ddot{\mathbf{q}} = -k_d v_{c,y}$$
+          Because $J_{c,y}$ has $+1.0$ on base velocity and $-R_{\text{wheel}}$ on wheel joint velocity, this couples wheel motor torque directly to forward acceleration ($\ddot{y}_{\text{base}} \approx R_{\text{wheel}} \ddot{q}_{\text{wheel}}$), preventing wheel motors from being zeroed out by torque regularization.
+        </li>
+        <li>
+          <strong>Relative Height Task (Fixing Platform & Wave Drop Collapse):</strong> Instead of penalizing absolute world height $(z_{\text{base}} - z_{\text{target}})^2$, the height task regulates height relative to the wheel axle midpoint:
+          $$h_{\text{rel}} = z_{\text{base}} - \frac{z_{\text{wheel},R} + z_{\text{wheel},L}}{2}, \quad a_{h,\text{des}} = - K_p (h_{\text{rel}} - h_{\text{rel},\text{nom}}) - K_d \dot{z}_{\text{base}}$$
+          This eliminates height tension whether the robot is on the platform, driving off drop ledges, or negotiating sinusoidal hills.
+        </li>
+        <li>
+          <strong>Gravity Support Prior (Fixing Free-Fall Minimization):</strong> Under torque minimization ($\min \|\boldsymbol{\tau}\|^2$), the QP previously favored $F_z \to 0$ (free-fall collapse under gravity). A quadratic prior:
+          $$w_{f_z} \|F_z - \frac{1}{2} m_{\text{tot}} g\|^2$$
+          guarantees the optimizer maintains positive ground normal force ($\approx 9.5\,\text{N}$ per wheel).
+        </li>
+        <li>
+          <strong>Stiff Hip Roll Posture Regularization (Fixing Lateral Toppling):</strong> The hip roll joints (joints 1 & 5) have a mechanical hard stop at $\pm 0.60\,\text{rad}$ ($34.4^\circ$). Assigning high-stiffness posture tracking ($w_{\text{post\_roll}} = 35.0, k_p = 45.0, k_d = 8.0$) prevents the legs from splaying outward and kicking the chassis into a rollover.
+        </li>
+        <li>
+          <strong>Autonomous Position-Hold Lock:</strong> When $v_{\text{target}} = 0$, the controller locks $y_{\text{hold}}$ and commands $v_{\text{adj}} = -1.5(y - y_{\text{hold}})$, preventing forward drift off platform ledges.
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 9: DUAL-LANE WAVY RUNWAY -->
+  <section>
+    <h2>9. Dual-Lane Sinusoidal Wavy Terrain Runway</h2>
+    <p>
+      To rigorously test 3D multi-contact active suspension, bilateral height decoupling, and disturbance rejection, a custom procedural terrain runway was developed in <code>CAD/wavy_scene.xml</code>.
+    </p>
+
+    <div class="figure-box">
+      <!-- Figure 3: Dual-Lane Wavy Terrain Schematic -->
+      <svg viewBox="0 0 650 280" width="100%" height="240" xmlns="http://www.w3.org/2000/svg">
+        <!-- Ground centerline -->
+        <line x1="50" y1="140" x2="600" y2="140" stroke="#475569" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="610" y="145" fill="#64748b" font-size="11">y (Forward)</text>
+
+        <!-- Right Wheel Track Wave (Phase = 0) -->
+        <path d="M 50 140 Q 120 70, 190 140 T 330 140 T 470 140 T 600 140" fill="none" stroke="#38bdf8" stroke-width="3"/>
+        <text x="60" y="80" fill="#38bdf8" font-size="12" font-weight="bold">Right Lane: z_R(y) = A sin(2πy/λ) [0° phase]</text>
+
+        <!-- Left Wheel Track Wave (Phase = 180°) -->
+        <path d="M 50 140 Q 120 210, 190 140 T 330 140 T 470 140 T 600 140" fill="none" stroke="#a855f7" stroke-width="3"/>
+        <text x="60" y="235" fill="#a855f7" font-size="12" font-weight="bold">Left Lane: z_L(y) = A sin(2πy/λ + π) [180° out-of-phase]</text>
+
+        <!-- Peak-to-peak annotation -->
+        <line x1="120" y1="70" x2="120" y2="210" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <circle cx="120" cy="70" r="4" fill="#38bdf8"/>
+        <circle cx="120" cy="210" r="4" fill="#a855f7"/>
+        <text x="130" y="145" fill="#f59e0b" font-size="11" font-weight="bold">Max Δz = 7.0 cm (Peak-to-Peak)</text>
+
+        <!-- Dimensions -->
+        <text x="330" y="55" fill="#94a3b8" font-size="10" text-anchor="middle">Amplitude A = 3.5 cm | Wavelength λ = 1.0 m | Runway Length = 6.0 m</text>
+      </svg>
+      <div class="figure-caption">Figure 3: Topographic cross-section of the dual-lane 180° out-of-phase sinusoidal runway. Left and right wheels drive at different elevations at different times.</div>
+    </div>
+
+    <h3>Mathematical Formulation of Terrain Lanes</h3>
+    <p>
+      The terrain elevation is parameterized along the forward axis $y$:
+    </p>
+    $$z(x, y) = A \cdot \sin\left(\frac{2\pi y}{\lambda} + \phi(x)\right), \quad \phi(x) = \begin{cases} 0 & \text{if } x < x_{\text{mid}} \quad \text{(Right Wheel Lane)} \\ \pi & \text{if } x \ge x_{\text{mid}} \quad \text{(Left Wheel Lane)} \end{cases}$$
+    <p>
+      With $A = 0.035\,\text{m}$ ($3.5\,\text{cm}$ amplitude) and $\lambda = 1.0\,\text{m}$ wavelength:
+    </p>
+    <ul>
+      <li>When the right wheel is at a wave crest ($z_R = +3.5\,\text{cm}$), the left wheel is at a wave trough ($z_L = -3.5\,\text{cm}$).</li>
+      <li>The peak elevation differential between bilateral wheel hubs is $\Delta z = 7.0\,\text{cm}$, requiring the active suspension and hip joints to articulate independently.</li>
+    </ul>
+
+    <h3>Active Leveling & Normal Force Equalization</h3>
+    <p>
+      To prevent the chassis from rolling violently with the terrain slopes, the WBC QP incorporates:
+    </p>
+    <ol>
+      <li><strong>Active Roll Leveling:</strong> $a_{\text{roll},\text{des}} = - K_{p,\text{roll}} \psi_{\text{base}} - K_{d,\text{roll}} \dot{\psi}_{\text{base}}$, driving base roll to zero.</li>
+      <li><strong>Normal Force Equalization:</strong> Soft quadratic objective penalty $w_{\text{fb}} (F_{z,R} - F_{z,L})^2$ forcing the optimizer to distribute contact traction equally between the higher and lower wheel.</li>
+    </ol>
+
+    <h3>Wavy Runway Telemetry Log</h3>
     <table>
       <thead>
         <tr>
-          <th>Input / Key</th>
-          <th>Action</th>
-          <th>Description</th>
+          <th>Sim Time</th>
+          <th>Forward Pos ($y$)</th>
+          <th>Velocity ($v_{\text{fwd}}$)</th>
+          <th>Right Wheel $z$</th>
+          <th>Left Wheel $z$</th>
+          <th>$\Delta z$ Differential</th>
+          <th>Chassis Roll</th>
+          <th>Up-Z Alignment</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><kbd>W</kbd> or <kbd>↑</kbd> (Up Arrow)</td>
+          <td>$0.50\,\text{s}$</td>
+          <td>$-0.80\,\text{m}$</td>
+          <td>$+0.01\,\text{m/s}$</td>
+          <td>$6.9\,\text{cm}$</td>
+          <td>$6.6\,\text{cm}$</td>
+          <td>$-0.3\,\text{cm}$</td>
+          <td>$+2.1^\circ$</td>
+          <td>$0.9926$</td>
+        </tr>
+        <tr>
+          <td>$1.00\,\text{s}$</td>
+          <td>$-0.75\,\text{m}$</td>
+          <td>$+0.29\,\text{m/s}$</td>
+          <td>$6.9\,\text{cm}$</td>
+          <td>$7.0\,\text{cm}$</td>
+          <td>$+0.1\,\text{cm}$</td>
+          <td>$+0.9^\circ$</td>
+          <td>$0.9886$</td>
+        </tr>
+        <tr>
+          <td>$1.50\,\text{s}$</td>
+          <td>$-0.56\,\text{m}$</td>
+          <td>$+0.41\,\text{m/s}$</td>
+          <td>$7.0\,\text{cm}$</td>
+          <td>$7.0\,\text{cm}$</td>
+          <td>$+0.0\,\text{cm}$</td>
+          <td>$+0.4^\circ$</td>
+          <td>$0.9988$</td>
+        </tr>
+        <tr>
+          <td>$2.00\,\text{s}$</td>
+          <td>$-0.33\,\text{m}$</td>
+          <td>$+0.46\,\text{m/s}$</td>
+          <td>$6.9\,\text{cm}$</td>
+          <td>$7.0\,\text{cm}$</td>
+          <td>$+0.0\,\text{cm}$</td>
+          <td>$+0.3^\circ$</td>
+          <td>$0.9997$</td>
+        </tr>
+        <tr>
+          <td>$2.50\,\text{s}$</td>
+          <td>$-0.09\,\text{m}$</td>
+          <td>$+0.47\,\text{m/s}$</td>
+          <td>$7.0\,\text{cm}$</td>
+          <td>$7.0\,\text{cm}$</td>
+          <td>$+0.0\,\text{cm}$</td>
+          <td>$+0.3^\circ$</td>
+          <td><strong>$0.9998$</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 10: ACROBATIC BACKFLIP STUNT -->
+  <section>
+    <h2>10. Acrobatic 360° Backflip Stunt Verification with WBC</h2>
+    <p>
+      The acrobatic stunt capability was verified using an autonomous multi-phase state machine triggered interactively via the <kbd>B</kbd> key:
+    </p>
+    <ol>
+      <li><strong>Crouch ($t = 0.00\,\text{s}$ to $0.20\,\text{s}$):</strong> Deep hip and knee compression ($q_k \to -0.60\,\text{rad}$) pre-loading the virtual suspension springs.</li>
+      <li><strong>Whip ($t = 0.20\,\text{s}$ to $0.216\,\text{s}$):</strong> Explosive torque pulse ($\tau_{\text{hip}} = +14.0\,\text{Nm}$) whipping the torso backward into rotational acceleration ($\dot{\theta} \approx 27.3\,\text{rad/s}$).</li>
+      <li><strong>Pop & Liftoff ($t = 0.216\,\text{s}$ to $0.25\,\text{s}$):</strong> Full knee extension thrusting the center of mass vertically into the air ($v_z = 6.78\,\text{m/s}$).</li>
+      <li><strong>Tucked Flight ($t = 0.25\,\text{s}$ to $0.57\,\text{s}$):</strong> Knees tuck tightly, passing through inverted apex at $z = 0.548\,\text{m}$ ($\text{Up-Z} = -0.9837$) with $181.7^\circ$ rotation.</li>
+      <li><strong>Untuck & Touchdown ($t = 0.57\,\text{s}$):</strong> Legs extend symmetrically to meet the platform at $344.7^\circ$ rotation.</li>
+      <li><strong>WBC Re-Settling ($t > 0.57\,\text{s}$):</strong> Whole-Body QP catches the touchdown impulse, dissipating vertical energy and restoring rock-steady balance ($\text{Up-Z} = 1.0000$).</li>
+    </ol>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Stunt Execution</th>
+          <th>Apex Height</th>
+          <th>Liftoff Velocity ($v_z$)</th>
+          <th>Touchdown Angle</th>
+          <th>Landing Up-Z</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>360° Backflip Stunt</td>
+          <td>$0.548\,\text{m}$</td>
+          <td>$6.776\,\text{m/s}$</td>
+          <td>$344.7^\circ$</td>
+          <td>$1.0000$</td>
+          <td><strong>SUCCESS (100%)</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 11: COMPARATIVE ARCHITECTURE & RL ROADMAP -->
+  <section>
+    <h2>11. Comparative Controller Benchmark & Sim-to-Real RL Architecture</h2>
+    <p>
+      The codebase was restructured into a modular controller architecture (<code>controllers/wbc/</code> and <code>controllers/mpc/</code>), allowing direct side-by-side benchmarking:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Attribute</th>
+          <th>Hierarchical WBC QP (OSQP)</th>
+          <th>Nonlinear MPC (acados SQP-RTI)</th>
+          <th>Deep Reinforcement Learning (Future)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Rate & Solve Time</strong></td>
+          <td>$1.0\,\text{kHz}$ ($\sim 1.4\text{--}1.9\,\text{ms}$)</td>
+          <td>$3.8\,\text{kHz}$ ($\sim 0.26\,\text{ms}$)</td>
+          <td>$50\,\text{Hz}$ (Policy Inference: $\sim 1.0\,\text{ms}$)</td>
+        </tr>
+        <tr>
+          <td><strong>System Representation</strong></td>
+          <td>Full rigid multibody dynamics ($M(q)\ddot{q} - J_c^T F_c - S^T \tau = -h$, 14 DOFs)</td>
+          <td>Reduced inverted pendulum with variable length ($l, \dot{l}, \theta, \omega$, 8 states)</td>
+          <td>Neural Policy network ($\pi_\theta(a|s)$) trained over domain randomized physics</td>
+        </tr>
+        <tr>
+          <td><strong>Contact & Friction</strong></td>
+          <td>Explicit 4-sided Coulomb friction pyramids $|F_x|, |F_y| \le \mu F_z$</td>
+          <td>Implicit penalty in cost function; no strict contact pyramids</td>
+          <td>Implicitly learned from contact reward signals and physics engine feedback</td>
+        </tr>
+        <tr>
+          <td><strong>Terrain Adaptation</strong></td>
+          <td>Direct operational space suspension leveling ($F_{z,R} \approx F_{z,L}$)</td>
+          <td>Requires manual kinematic coordination wrapper</td>
+          <td>Generalizes to arbitrary rough terrain via terrain heightfield observations</td>
+        </tr>
+        <tr>
+          <td><strong>Sim-to-Real Safety</strong></td>
+          <td>Guaranteed physical constraint enforcement (torques, friction cones)</td>
+          <td>May violate actuator saturation under unmodeled terrain shocks</td>
+          <td>Cannot guarantee zero constraint violation without safety filter</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Sim-to-Real Deployment Architecture with RL</h3>
+    <div class="callout green">
+      <strong>Hierarchical RL + WBC Pipeline:</strong>
+      <p>
+        The modular structure established in this repository is directly architected for future sim-to-real reinforcement learning deployment:
+      </p>
+      <ol>
+        <li><strong>High-Level RL Planner ($50\,\text{Hz}$):</strong> An actor-critic policy network trained in MuJoCo / IsaacGym processes terrain elevation map inputs, IMU orientation, and joystick commands, outputting high-level motion references:
+          $$\mathbf{a}_{\text{RL}} = [v_{\text{target}},\, \theta_{\text{target}},\, \psi_{\text{target}},\, \Delta h_{\text{target}}]^T$$
+        </li>
+        <li><strong>Low-Level WBC QP ($1.0\,\text{kHz}$):</strong> The Whole-Body QP controller runs at $1\,\text{kHz}$ directly on the robot's onboard microcontroller or compute board, taking the RL references and computing motor torques while strictly enforcing motor torque saturation, joint limits, and friction cone boundaries.
+        </li>
+      </ol>
+      <p>
+        In this configuration, the WBC acts as an <strong>exact physical safety filter</strong>, shielding the robot hardware from out-of-distribution neural policy outputs while providing agile terrain traversal.
+      </p>
+    </div>
+  </section>
+
+  <!-- SECTION 12: CONTROLS & CLI REFERENCE -->
+  <section>
+    <h2>12. Interactive Controls, Bazel Targets & CLI Reference</h2>
+    <p>
+      The complete codebase is organized into modular packages built and run using Bazel:
+    </p>
+
+    <pre><code># 1. Launch Interactive GUI with Default Whole-Body QP Controller:
+bazel run //:sim_gui -- --controller wbc
+
+# 2. Launch Interactive GUI on Dual-Lane Offset Wavy Runway:
+bazel run //:sim_gui -- --wavy --controller wbc
+
+# 3. Benchmark with acados Nonlinear MPC:
+bazel run //:sim_gui -- --controller nmpc
+bazel run //:sim_gui -- --wavy --controller nmpc
+
+# 4. Execute Automated Backflip Verification:
+bazel run //:sim_gui -- --controller wbc --auto-flip --duration 4.0
+
+# 5. Headless Benchmarking:
+bazel run //:sim_gui -- --headless --controller wbc --duration 5.0
+bazel run //:mpc_sim</code></pre>
+
+    <h3>Interactive Keyboard & Mouse Controls</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Key / Input</th>
+          <th>Action</th>
+          <th>WBC QP Functionality</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>W</kbd> or <kbd>↑</kbd></td>
           <td><strong>Drive Forward</strong></td>
-          <td>Increases forward velocity setpoint ($+0.2\,\text{m/s}$ per press, up to $+0.8\,\text{m/s}$).</td>
+          <td>Increments $v_{\text{target}}$ by $+0.25\,\text{m/s}$ (up to $+2.0\,\text{m/s}$); WBC tilts body forward and commands wheel traction.</td>
         </tr>
         <tr>
-          <td><kbd>S</kbd> or <kbd>↓</kbd> (Down Arrow)</td>
-          <td><strong>Drive Back / Decel</strong></td>
-          <td>Decreases forward velocity setpoint ($-0.2\,\text{m/s}$ per press, down to $-0.5\,\text{m/s}$).</td>
+          <td><kbd>S</kbd> or <kbd>↓</kbd></td>
+          <td><strong>Decel / Reverse</strong></td>
+          <td>Decrements $v_{\text{target}}$ by $-0.25\,\text{m/s}$ (down to $-1.0\,\text{m/s}$); WBC applies regenerative counter-torque.</td>
         </tr>
         <tr>
-          <td><kbd>A</kbd> or <kbd>←</kbd> (Left Arrow)</td>
+          <td><kbd>A</kbd> or <kbd>←</kbd></td>
           <td><strong>Steer Left (Lean)</strong></td>
-          <td>Increases left yaw rate ($+0.3\,\text{rad/s}$) and automatically banks the torso inward to the left.</td>
+          <td>Increases left yaw rate ($+0.35\,\text{rad/s}$); WBC dynamically banks hips into turn based on centrifugal $a_{\text{lat}} = v \dot{\psi}$.</td>
         </tr>
         <tr>
-          <td><kbd>D</kbd> or <kbd>→</kbd> (Right Arrow)</td>
+          <td><kbd>D</kbd> or <kbd>→</kbd></td>
           <td><strong>Steer Right (Lean)</strong></td>
-          <td>Increases right yaw rate ($-0.3\,\text{rad/s}$) and automatically banks the torso inward to the right.</td>
+          <td>Increases right yaw rate ($-0.35\,\text{rad/s}$); WBC dynamically banks hips into turn.</td>
         </tr>
         <tr>
           <td><kbd>X</kbd></td>
           <td><strong>Brake / Full Stop</strong></td>
-          <td>Zeros velocity and yaw rate setpoints; locks stationary position with active position holding.</td>
+          <td>Zeros velocity setpoints and locks autonomous stationary position holding ($y \to y_{\text{hold}}$).</td>
         </tr>
         <tr>
           <td><kbd>C</kbd></td>
           <td><strong>Crouch Down</strong></td>
-          <td>Smoothly flexes knees to $-14^\circ$, lowering pelvis height to $14.0\,\text{cm}$.</td>
+          <td>Lowers relative ride height ($\Delta h = -5\,\text{cm}$) by flexing knees symmetrically.</td>
         </tr>
         <tr>
           <td><kbd>T</kbd></td>
           <td><strong>Stand Tall</strong></td>
-          <td>Smoothly extends knees to $+12^\circ$, raising pelvis height to $17.2\,\text{cm}$.</td>
+          <td>Raises relative ride height ($\Delta h = +3\,\text{cm}$) by extending knees symmetrically.</td>
         </tr>
         <tr>
           <td><kbd>N</kbd></td>
-          <td><strong>Nominal Stance</strong></td>
-          <td>Returns knees to $0^\circ$ and pelvis to nominal $15.9\,\text{cm}$ ride height.</td>
+          <td><strong>Nominal Height</strong></td>
+          <td>Resets relative height to nominal stance ($h_{\text{rel}} = -0.0128\,\text{m}$).</td>
+        </tr>
+        <tr>
+          <td><kbd>B</kbd></td>
+          <td><strong>360° Backflip</strong></td>
+          <td>Triggers explosive acrobatic backflip stunt with mid-air tuck and WBC landing recovery.</td>
         </tr>
         <tr>
           <td><kbd>Right-Click + Drag</kbd></td>
           <td><strong>Interactive Poke</strong></td>
-          <td>Applies 3D perturbation forces directly to the robot torso / legs to test dynamic re-balancing.</td>
+          <td>Applies 3D perturbation force on robot body; WBC rejects disturbance via friction pyramids.</td>
         </tr>
         <tr>
           <td><kbd>Backspace</kbd></td>
           <td><strong>Viewer Reset</strong></td>
-          <td>Resets robot back to the top surface of the platform ($z = 0.0812\,\text{m}$) and clears integrators.</td>
+          <td>Resets robot back to top platform keyframe and clears integrators.</td>
         </tr>
         <tr>
           <td><kbd>Space</kbd></td>

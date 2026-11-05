@@ -81,17 +81,16 @@ def export_robot_model() -> AcadosModel:
     # Physical Robot Parameters directly extracted from CAD/robot.xml:
     # Total robot mass: 1.943 kg
     # Nominal COM distance from wheel axle: 0.148 m
-    # Total pitch inertia about root: 0.067 kg m^2
-    # Total roll inertia about root: 0.076 kg m^2
+    # Base pitch inertia: 0.00224 kg m^2, Roll inertia: 0.00336 kg m^2
     M = 1.943          # Torso + leg links lumped mass (kg)
     m_w = 0.0864       # Two wheels combined mass (kg)
-    R = 0.04           # Wheel radius (m)
+    R = 0.05           # Wheel radius (m) (100mm diameter hub wheel)
     I_w = 1.08e-4      # Wheel rotational inertia (kg m^2)
-    M_tot = M + m_w + (I_w / (R**2))  # 2.097 kg
+    M_tot = M + m_w + (I_w / (R**2))  # Effective translational mass
 
     l_nom = 0.148      # Nominal pendulum length (m)
-    I_y0 = 0.0668      # Base pitch inertia (kg m^2)
-    I_x0 = 0.0765      # Base roll inertia (kg m^2)
+    I_y0 = 0.00224     # Base pitch inertia from CAD (kg m^2)
+    I_x0 = 0.00336     # Base roll inertia from CAD (kg m^2)
     g = 9.81           # Gravity (m/s^2)
     b_l = 6.0          # Leg extension damping (N s / m)
     b_roll = 0.45      # Roll lean damping (N m s / rad)
@@ -156,22 +155,22 @@ def generate_solver():
     ocp.cost.cost_type_e = 'LINEAR_LS'
 
     # Ascento-Tuned Weight Matrices:
-    # High pitch authority + agile velocity tracking + precise ZMP roll lean
+    # Pure velocity tracking (Q[p]=0) + high pitch authority + precise ZMP roll lean
     Q = np.array([
-        5.0,    # p:    position tracking / holding
-        25.0,   # v:    forward velocity tracking authority
-        220.0,  # theta: firm pitch balance regulation
-        28.0,   # omega: pitch rate damping
+        0.0,    # p:    zero cost on path position to prevent runaway during velocity control
+        45.0,   # v:    forward velocity tracking authority
+        260.0,  # theta: firm pitch balance regulation
+        26.0,   # omega: pitch rate damping
         180.0,  # l:    active suspension height tracking
         12.0,   # dl:   suspension vertical velocity damping
-        90.0,   # psi:  ZMP active roll banking tracking
+        100.0,  # psi:  ZMP active roll banking tracking
         10.0    # dpsi: roll rate damping
     ])
 
     R_weight = np.array([
-        0.005,  # tau_w:    wheel torque penalization
+        0.001,  # tau_w:    wheel torque penalization (allows realistic balancing torques)
         0.001,  # F_l:      leg thrust penalization (centered at M*g)
-        0.005   # tau_roll: roll lean torque penalization
+        0.002   # tau_roll: roll lean torque penalization
     ])
 
     ocp.cost.W = np.diag(np.concatenate([Q, R_weight]))

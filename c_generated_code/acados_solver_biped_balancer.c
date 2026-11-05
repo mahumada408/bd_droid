@@ -463,17 +463,16 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
 
    double* W_0 = calloc(NY0*NY0, sizeof(double));
     // change only the non-zero elements:
-    W_0[0+(NY0) * 0] = 5;
-    W_0[1+(NY0) * 1] = 25;
-    W_0[2+(NY0) * 2] = 220;
-    W_0[3+(NY0) * 3] = 28;
+    W_0[1+(NY0) * 1] = 45;
+    W_0[2+(NY0) * 2] = 260;
+    W_0[3+(NY0) * 3] = 26;
     W_0[4+(NY0) * 4] = 180;
     W_0[5+(NY0) * 5] = 12;
-    W_0[6+(NY0) * 6] = 90;
+    W_0[6+(NY0) * 6] = 100;
     W_0[7+(NY0) * 7] = 10;
-    W_0[8+(NY0) * 8] = 0.005;
+    W_0[8+(NY0) * 8] = 0.001;
     W_0[9+(NY0) * 9] = 0.001;
-    W_0[10+(NY0) * 10] = 0.005;
+    W_0[10+(NY0) * 10] = 0.002;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, 0, "W", W_0);
     free(W_0);
     double* Vx_0 = calloc(NY0*NX, sizeof(double));
@@ -507,17 +506,16 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
     free(yref);
     double* W = calloc(NY*NY, sizeof(double));
     // change only the non-zero elements:
-    W[0+(NY) * 0] = 5;
-    W[1+(NY) * 1] = 25;
-    W[2+(NY) * 2] = 220;
-    W[3+(NY) * 3] = 28;
+    W[1+(NY) * 1] = 45;
+    W[2+(NY) * 2] = 260;
+    W[3+(NY) * 3] = 26;
     W[4+(NY) * 4] = 180;
     W[5+(NY) * 5] = 12;
-    W[6+(NY) * 6] = 90;
+    W[6+(NY) * 6] = 100;
     W[7+(NY) * 7] = 10;
-    W[8+(NY) * 8] = 0.005;
+    W[8+(NY) * 8] = 0.001;
     W[9+(NY) * 9] = 0.001;
-    W[10+(NY) * 10] = 0.005;
+    W[10+(NY) * 10] = 0.002;
 
     for (int i = 1; i < N; i++)
     {
@@ -560,13 +558,12 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
 
     double* W_e = calloc(NYN*NYN, sizeof(double));
     // change only the non-zero elements:
-    W_e[0+(NYN) * 0] = 12.5;
-    W_e[1+(NYN) * 1] = 62.5;
-    W_e[2+(NYN) * 2] = 550;
-    W_e[3+(NYN) * 3] = 70;
+    W_e[1+(NYN) * 1] = 112.5;
+    W_e[2+(NYN) * 2] = 650;
+    W_e[3+(NYN) * 3] = 65;
     W_e[4+(NYN) * 4] = 450;
     W_e[5+(NYN) * 5] = 30;
-    W_e[6+(NYN) * 6] = 225;
+    W_e[6+(NYN) * 6] = 250;
     W_e[7+(NYN) * 7] = 25;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N, "W", W_e);
     free(W_e);

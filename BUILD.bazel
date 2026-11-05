@@ -50,6 +50,7 @@ cc_binary(
     ],
     data = [
         "CAD/scene.xml",
+        "CAD/wavy_scene.xml",
         "CAD/robot.xml",
         "CAD/assets",
     ],
@@ -84,7 +85,8 @@ cc_binary(
         ":libbalancer_mpc.so",
         "run_interactive_sim.py",
         "CAD/scene.xml",
+        "CAD/wavy_scene.xml",
         "CAD/robot.xml",
         "CAD/assets",
-    ],
+    ] + glob(["controllers/**"]),
 )

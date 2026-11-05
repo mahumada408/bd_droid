@@ -133,7 +133,7 @@ public:
         // 4. Update stage references: yref = [p, v, theta, omega, l, dl, psi, dpsi, tau_w, F_l, tau_roll] (ny = 11)
         const double dt_stage = 0.40 / BIPED_BALANCER_N;
         for (int i = 0; i < BIPED_BALANCER_N; ++i) {
-            double p_stage = target.hold_position ? target.p_ref : (state.p + target.v_ref * (i * dt_stage));
+            double p_stage = state.p + target.v_ref * (i * dt_stage);
             double yref[BIPED_BALANCER_NY] = {
                 p_stage,
                 target.v_ref,
@@ -151,7 +151,7 @@ public:
         }
 
         // Terminal reference: yref_e = [p, v, theta, omega, l, dl, psi, dpsi] (ny_e = 8)
-        double p_end = target.hold_position ? target.p_ref : (state.p + target.v_ref * 0.40);
+        double p_end = state.p + target.v_ref * 0.40;
         double yref_e[BIPED_BALANCER_NYN] = {
             p_end,
             target.v_ref,
@@ -169,17 +169,23 @@ public:
         int status = biped_balancer_acados_solve(capsule_);
         auto t_end = std::chrono::high_resolution_clock::now();
 
-        if (status != 0 && status != 2) { // 0: ACADOS_SUCCESS, 2: ACADOS_MAXITER
-            std::cerr << "[Warning] acados solve returned status: " << status << std::endl;
-        }
-
         if (solve_time_us) {
             *solve_time_us = std::chrono::duration<double, std::micro>(t_end - t_start).count();
         }
 
         // 6. Extract optimal controls u_0* = [tau_w, F_l, tau_roll]
-        double u_opt[BIPED_BALANCER_NU] = {0.0, 18.15, 0.0};
-        ocp_nlp_out_get(config_, dims_, out_, 0, "u", u_opt);
+        double u_opt[BIPED_BALANCER_NU] = {0.0, 19.06, 0.0};
+        if (status == 0 || status == 2) {
+            ocp_nlp_out_get(config_, dims_, out_, 0, "u", u_opt);
+            if (!std::isfinite(u_opt[0]) || !std::isfinite(u_opt[1]) || !std::isfinite(u_opt[2])) {
+                u_opt[0] = 0.0;
+                u_opt[1] = 19.06;
+                u_opt[2] = 0.0;
+            }
+        } else {
+            // In case of QP infeasibility, reset capsule state to nominal
+            biped_balancer_acados_reset(capsule_, 1);
+        }
 
         return Controls{u_opt[0], u_opt[1], u_opt[2], psi_ref};
     }
