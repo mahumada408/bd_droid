@@ -25,19 +25,23 @@ void mpc_destroy(MpcHandle* handle) {
 void mpc_step(MpcHandle* handle,
               double p, double v,
               double theta, double omega,
-              double qh, double dqh,
-              double qk, double dqk,
-              double target_pos,
-              double target_qh,
-              double target_qk,
+              double l, double dl,
+              double psi, double dpsi,
+              double v_ref,
+              double l_ref,
+              double omega_yaw,
+              double p_ref,
+              int hold_position,
               double* out_controls,
               double* solve_time_us) {
     if (!handle || !out_controls) return;
-    balancer::State state{p, v, theta, omega, qh, dqh, qk, dqk};
-    balancer::Controls ctrl = handle->mpc.Step(state, target_pos, target_qh, target_qk, solve_time_us);
+    balancer::State state{p, v, theta, omega, l, dl, psi, dpsi};
+    balancer::Target target{v_ref, l_ref, omega_yaw, p_ref, (hold_position != 0)};
+    balancer::Controls ctrl = handle->mpc.Step(state, target, solve_time_us);
     out_controls[0] = ctrl.tau_w;
-    out_controls[1] = ctrl.tau_h;
-    out_controls[2] = ctrl.tau_k;
+    out_controls[1] = ctrl.F_l;
+    out_controls[2] = ctrl.tau_roll;
+    out_controls[3] = ctrl.psi_ref;
 }
 
 }

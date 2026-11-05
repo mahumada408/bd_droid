@@ -77,7 +77,7 @@ int main()
     x_current[1] = 0;
     x_current[2] = 0;
     x_current[3] = 0;
-    x_current[4] = 0;
+    x_current[4] = 0.148;
     x_current[5] = 0;
     x_current[6] = 0;
     x_current[7] = 0;
@@ -90,6 +90,12 @@ int main()
     u0[0] = 0.0;
     u0[1] = 0.0;
     u0[2] = 0.0;
+    // set parameters
+    double p[NP];
+    p[0] = 0;
+
+    biped_balancer_acados_sim_update_params(capsule, p, NP);
+  
 
   
 

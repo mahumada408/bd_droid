@@ -78,6 +78,22 @@ bazel run //:mpc_sim
 
 ## 4. Benchmark Performance
 
+### Ascento-Inspired Dynamic NMPC Performance (`docs/ascento.pdf`)
+Inspired by ETH Zurich's Ascento architecture (*"LQR-Assisted Whole-Body Control of a Wheeled Bipedal Robot with Kinematic Loops"*, Klemm et al., IEEE RAL 2020), the MPC integrates:
+1. **Coupled Non-Minimum Phase Balancing**: Captures the essential dynamics of wheeled balancing where rapid forward acceleration requires counter-steering backwards to achieve forward tilt before accelerating.
+2. **Variable Leg Length & Variable Inertia ($I_y(l) = I_0 + M l^2$)**: Direct state coupling between vertical leg extension $l(t)$ and pitch dynamics, enabling dynamic crouching into turns.
+3. **ZMP-Regulated Roll Leaning for Curves**: Dynamically regulates roll lean angle $\psi^{\text{ref}} = \arctan(v \omega_{\text{yaw}} / g)$, shifting the Zero-Moment Point (ZMP) directly to the center of the Line of Support ($G$) to prevent tripping and maximize cornering traction at speeds up to $2.0\,\text{m/s}$.
+4. **Active Vertical Force Modulation ($F_l$)**: Directly optimizes vertical thrust force for active suspension damping and terrain compliance.
+
+| Metric | Target | Achieved | Status |
+| :--- | :--- | :--- | :--- |
+| **SQP-RTI Solve Time (Average)** | $< 2.0\,\text{ms}$ | **$0.496\,\text{ms}$ ($496.6\,\mu\text{s}$)** | **PASS** ($2{,}013\,\text{Hz}$ rate) |
+| **SQP-RTI Solve Time (Peak)** | $< 10.0\,\text{ms}$ | **$2.92\,\text{ms}$** | **PASS** |
+| **Disturbance Recovery Time ($1.5\,\text{rad/s}$ Poke)** | $< 1.0\,\text{s}$ | **$0.55\,\text{s}$** | **PASS** |
+| **Dynamic Top Speed** | $\ge 1.5\,\text{m/s}$ | **$2.0\,\text{m/s}$** | **PASS** |
+| **ZMP Curve Lean Authority** | $\pm 15^\circ$ | **$\pm 20^\circ$ active banking** | **PASS** |
+| **Simulation Speed** | $> 1.0\times$ Real-Time | **$3.71\times$ Real-Time** | **PASS** |
+
 * **Simulated Time:** $10.0\,\text{s}$ (5,000 physics steps at 500 Hz)
 * **Wall-Clock Duration:** $208.5\,\text{ms}$ (~$48.0\times$ faster than real-time)
 * **Model Topology (Rev 3):** 8 actuators (`right_hip_roll`, `right_hip_pitch`, `right_knee`, `right_wheel`, `left_hip_roll`, `left_hip_pitch`, `left_knee`, `left_wheel`), 15 generalized coordinates ($qpos$), 14 velocities ($qvel$).

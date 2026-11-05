@@ -367,7 +367,14 @@ void biped_balancer_acados_create_setup_functions(biped_balancer_solver_capsule*
 void biped_balancer_acados_create_set_default_parameters(biped_balancer_solver_capsule* capsule)
 {
 
-    // no parameters defined
+    const int N = capsule->nlp_solver_plan->N;
+    // initialize parameters to nominal value
+    double* p = calloc(NP, sizeof(double));
+
+    for (int i = 0; i <= N; i++) {
+        biped_balancer_acados_update_params(capsule, i, p, NP);
+    }
+    free(p);
 
 
     // no global parameters defined
@@ -429,12 +436,7 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
         cost_scaling[17] = 0.02;
         cost_scaling[18] = 0.02;
         cost_scaling[19] = 0.02;
-        cost_scaling[20] = 0.02;
-        cost_scaling[21] = 0.02;
-        cost_scaling[22] = 0.02;
-        cost_scaling[23] = 0.02;
-        cost_scaling[24] = 0.02;
-        cost_scaling[25] = 1;
+        cost_scaling[20] = 1;
         for (int i = 0; i <= N; i++)
         {
             ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "scaling", &cost_scaling[i]);
@@ -454,22 +456,24 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
     /**** Cost ****/
     double* yref_0 = calloc(NY0, sizeof(double));
     // change only the non-zero elements:
+    yref_0[4] = 0.148;
+    yref_0[9] = 19.060830000000003;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, 0, "yref", yref_0);
     free(yref_0);
 
    double* W_0 = calloc(NY0*NY0, sizeof(double));
     // change only the non-zero elements:
-    W_0[0+(NY0) * 0] = 20;
-    W_0[1+(NY0) * 1] = 5;
-    W_0[2+(NY0) * 2] = 2000;
-    W_0[3+(NY0) * 3] = 200;
-    W_0[4+(NY0) * 4] = 500;
-    W_0[5+(NY0) * 5] = 50;
-    W_0[6+(NY0) * 6] = 500;
-    W_0[7+(NY0) * 7] = 50;
-    W_0[8+(NY0) * 8] = 0.0001;
-    W_0[9+(NY0) * 9] = 0.0001;
-    W_0[10+(NY0) * 10] = 0.0001;
+    W_0[0+(NY0) * 0] = 5;
+    W_0[1+(NY0) * 1] = 25;
+    W_0[2+(NY0) * 2] = 220;
+    W_0[3+(NY0) * 3] = 28;
+    W_0[4+(NY0) * 4] = 180;
+    W_0[5+(NY0) * 5] = 12;
+    W_0[6+(NY0) * 6] = 90;
+    W_0[7+(NY0) * 7] = 10;
+    W_0[8+(NY0) * 8] = 0.005;
+    W_0[9+(NY0) * 9] = 0.001;
+    W_0[10+(NY0) * 10] = 0.005;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, 0, "W", W_0);
     free(W_0);
     double* Vx_0 = calloc(NY0*NX, sizeof(double));
@@ -493,6 +497,8 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
     free(Vu_0);
     double* yref = calloc(NY, sizeof(double));
     // change only the non-zero elements:
+    yref[4] = 0.148;
+    yref[9] = 19.060830000000003;
 
     for (int i = 1; i < N; i++)
     {
@@ -501,17 +507,17 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
     free(yref);
     double* W = calloc(NY*NY, sizeof(double));
     // change only the non-zero elements:
-    W[0+(NY) * 0] = 20;
-    W[1+(NY) * 1] = 5;
-    W[2+(NY) * 2] = 2000;
-    W[3+(NY) * 3] = 200;
-    W[4+(NY) * 4] = 500;
-    W[5+(NY) * 5] = 50;
-    W[6+(NY) * 6] = 500;
-    W[7+(NY) * 7] = 50;
-    W[8+(NY) * 8] = 0.0001;
-    W[9+(NY) * 9] = 0.0001;
-    W[10+(NY) * 10] = 0.0001;
+    W[0+(NY) * 0] = 5;
+    W[1+(NY) * 1] = 25;
+    W[2+(NY) * 2] = 220;
+    W[3+(NY) * 3] = 28;
+    W[4+(NY) * 4] = 180;
+    W[5+(NY) * 5] = 12;
+    W[6+(NY) * 6] = 90;
+    W[7+(NY) * 7] = 10;
+    W[8+(NY) * 8] = 0.005;
+    W[9+(NY) * 9] = 0.001;
+    W[10+(NY) * 10] = 0.005;
 
     for (int i = 1; i < N; i++)
     {
@@ -548,19 +554,20 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
     free(Vu);
     double* yref_e = calloc(NYN, sizeof(double));
     // change only the non-zero elements:
+    yref_e[4] = 0.148;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N, "yref", yref_e);
     free(yref_e);
 
     double* W_e = calloc(NYN*NYN, sizeof(double));
     // change only the non-zero elements:
-    W_e[0+(NYN) * 0] = 50;
-    W_e[1+(NYN) * 1] = 12.5;
-    W_e[2+(NYN) * 2] = 5000;
-    W_e[3+(NYN) * 3] = 500;
-    W_e[4+(NYN) * 4] = 1250;
-    W_e[5+(NYN) * 5] = 125;
-    W_e[6+(NYN) * 6] = 1250;
-    W_e[7+(NYN) * 7] = 125;
+    W_e[0+(NYN) * 0] = 12.5;
+    W_e[1+(NYN) * 1] = 62.5;
+    W_e[2+(NYN) * 2] = 550;
+    W_e[3+(NYN) * 3] = 70;
+    W_e[4+(NYN) * 4] = 450;
+    W_e[5+(NYN) * 5] = 30;
+    W_e[6+(NYN) * 6] = 225;
+    W_e[7+(NYN) * 7] = 25;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N, "W", W_e);
     free(W_e);
     double* Vx_e = calloc(NYN*NX, sizeof(double));
@@ -599,6 +606,8 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
     double* lbx0 = lubx0;
     double* ubx0 = lubx0 + NBX0;
     // change only the non-zero elements:
+    lbx0[4] = 0.148;
+    ubx0[4] = 0.148;
 
     ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, 0, "idxbx", idxbx0);
     ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, 0, "lbx", lbx0);
@@ -636,8 +645,7 @@ void biped_balancer_acados_setup_nlp_in(biped_balancer_solver_capsule* capsule, 
     double* ubu = lubu + NBU;
     lbu[0] = -15;
     ubu[0] = 15;
-    lbu[1] = -15;
-    ubu[1] = 15;
+    ubu[1] = 100;
     lbu[2] = -15;
     ubu[2] = 15;
 
@@ -745,7 +753,7 @@ static void biped_balancer_acados_create_set_opts(biped_balancer_solver_capsule*
     ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "levenberg_marquardt", &levenberg_marquardt);
 
     /* options QP solver */
-    int qp_solver_cond_N;const int qp_solver_cond_N_ori = 25;
+    int qp_solver_cond_N;const int qp_solver_cond_N_ori = 20;
     qp_solver_cond_N = N < qp_solver_cond_N_ori ? N : qp_solver_cond_N_ori; // use the minimum value here
     ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "qp_cond_N", &qp_solver_cond_N);
 
@@ -805,6 +813,7 @@ void biped_balancer_acados_set_nlp_out(biped_balancer_solver_capsule* capsule)
     double* x0 = xu0;
 
     // initialize with x0
+    x0[4] = 0.148;
 
 
     double* u0 = xu0 + NX;
@@ -957,7 +966,7 @@ int biped_balancer_acados_update_params(biped_balancer_solver_capsule* capsule, 
 {
     int solver_status = 0;
 
-    int casadi_np = 0;
+    int casadi_np = 1;
     if (casadi_np != np) {
         printf("acados_update_params: trying to set %i parameters for external functions."
             " External function has %i parameters. Exiting.\n", np, casadi_np);

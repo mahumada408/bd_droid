@@ -37,7 +37,7 @@
 #define BIPED_BALANCER_NX     8
 #define BIPED_BALANCER_NZ     0
 #define BIPED_BALANCER_NU     3
-#define BIPED_BALANCER_NP     0
+#define BIPED_BALANCER_NP     1
 
 #ifdef __cplusplus
 extern "C" {

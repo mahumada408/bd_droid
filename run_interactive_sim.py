@@ -171,7 +171,7 @@ def main():
             posture_str = f"Tall ({qk_target:+.2f})"
         else:
             posture_str = "Nominal"
-        print(f"[{action_msg:<14}] Speed: {v_target:+.2f} m/s | Turn: {yaw_rate_target:+.2f} rad/s{lean_str:<18} | Height: {posture_str}")
+        print(f"[{action_msg:<14}] Speed: {v_target:+.2f} m/s | Turn: {yaw_rate_target:+.2f} rad/s{lean_str:<18} | Stance: {posture_str}")
 
     def trigger_flip():
         nonlocal is_backflipping, bf_timer, bf_step_count, bf_t_land, bf_state
@@ -216,16 +216,16 @@ def main():
         nonlocal qk_target, v_target, yaw_rate_target
 
         if keycode in (ord('W'), ord('w'), 265):
-            v_target = np.clip(v_target + 0.20, -0.50, 0.80)
+            v_target = np.clip(v_target + 0.25, -1.0, 2.0)
             print_status("Speed Up")
         elif keycode in (ord('S'), ord('s'), 264):
-            v_target = np.clip(v_target - 0.20, -0.50, 0.80)
+            v_target = np.clip(v_target - 0.25, -1.0, 2.0)
             print_status("Slow/Reverse")
         elif keycode in (ord('A'), ord('a'), 263):
-            yaw_rate_target = np.clip(yaw_rate_target + 0.30, -1.20, 1.20)
+            yaw_rate_target = np.clip(yaw_rate_target + 0.35, -1.80, 1.80)
             print_status("Steer Left")
         elif keycode in (ord('D'), ord('d'), 262):
-            yaw_rate_target = np.clip(yaw_rate_target - 0.30, -1.20, 1.20)
+            yaw_rate_target = np.clip(yaw_rate_target - 0.35, -1.80, 1.80)
             print_status("Steer Right")
         elif keycode in (ord('X'), ord('x')):
             v_target = 0.0
@@ -625,10 +625,15 @@ def main():
                         # Manual keyboard driving mode: active hip banking and differential knees
                         alpha_q = min(1.0, 3.0 * dt_sim)
                         qk_current += alpha_q * (qk_target - qk_current)
-                        bank_cmd = k_roll_bank * yaw_filtered
+                        # Ascento-inspired ZMP-regulated dynamic curve leaning:
+                        # psi_ref = arctan(v * omega_yaw / g)
+                        a_lat = v_fwd * omega_yaw
+                        psi_ref = float(np.arctan2(a_lat, 9.81))
+                        psi_ref = float(np.clip(psi_ref, -0.35, 0.35))
+                        bank_cmd = k_roll_bank * yaw_filtered + 0.45 * psi_ref
+                        knee_diff_cmd = k_knee_diff * yaw_filtered + 0.25 * psi_ref
                         q_roll_R_cmd = + bank_cmd
                         q_roll_L_cmd = - bank_cmd
-                        knee_diff_cmd = k_knee_diff * yaw_filtered
                         d_qh_R = -0.515 * qk_current + 0.098 * (qk_current ** 2)
                         d_qh_L = +0.705 * qk_current - 0.011 * (qk_current ** 2)
                         qh_R_cmd = qh_R_nom + d_qh_R

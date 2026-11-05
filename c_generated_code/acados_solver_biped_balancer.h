@@ -39,7 +39,7 @@
 #define BIPED_BALANCER_NX     8
 #define BIPED_BALANCER_NZ     0
 #define BIPED_BALANCER_NU     3
-#define BIPED_BALANCER_NP     0
+#define BIPED_BALANCER_NP     1
 #define BIPED_BALANCER_NP_GLOBAL     0
 #define BIPED_BALANCER_NBX    0
 #define BIPED_BALANCER_NBX0   8
@@ -64,7 +64,7 @@
 #define BIPED_BALANCER_NY0    11
 #define BIPED_BALANCER_NY     11
 #define BIPED_BALANCER_NYN    8
-#define BIPED_BALANCER_N      25
+#define BIPED_BALANCER_N      20
 #define BIPED_BALANCER_NH     0
 #define BIPED_BALANCER_NHN    0
 #define BIPED_BALANCER_NH0    0
