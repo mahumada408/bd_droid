@@ -112,6 +112,8 @@ struct WbcHandle {
   double t_low[2] = {0, 0};
   double Fn_est[2] = {0, 0};
   double phi_off = 0;        // learned lean offset (IMU bias / CoM error)
+  // wheel-joint disturbance observer (same momentum observer, wheel rows)
+  double pw_int[2] = {0, 0}, tau_dist[2] = {0, 0};
 
   // work buffers
   std::vector<double> M, jp, jpd, Jhub[2], Jc, Jk, Jcom, Jw, JT, P, q, Atau, btau;
@@ -188,6 +190,8 @@ struct WbcHandle {
     t_low[0] = t_low[1] = 0;
     Fn_est[0] = Fn_est[1] = 0;
     phi_off = 0;
+    pw_int[0] = pw_int[1] = 0;
+    tau_dist[0] = tau_dist[1] = 0;
     std::fill(last_tau.begin(), last_tau.end(), 0.0);
   }
 
@@ -214,10 +218,6 @@ struct WbcHandle {
     const auto t0 = std::chrono::steady_clock::now();
     const double* qv = d->qvel;
 
-    // Turn-rate limiter: |v * omega| <= a_lat_max
-    const double w_cap = p.a_lat_max / std::max(std::fabs(v_target), 1e-3);
-    yaw_target = clampd(yaw_target, -w_cap, w_cap);
-
     // ---- Base state (heading frame)
     const double* R = d->xmat + 9;    // body 1, row-major
     double nf = std::hypot(R[1], R[4]);
@@ -225,7 +225,10 @@ struct WbcHandle {
     const double fh[3] = {R[1] / nf, R[4] / nf, 0.0};
     const double rh[3] = {fh[1], -fh[0], 0.0};
     const double theta = std::atan2(R[7], R[8]);
-    const double roll = std::atan2(R[2], R[8]);
+    // Roll about the body's forward axis (heading-invariant). Using R[2] (world-x
+    // component of body z) here is only roll while facing +y; after a half turn
+    // its sign flips and the roll loop becomes positive feedback.
+    const double roll = std::atan2(-R[6], R[8]);
     const double yaw = std::atan2(fh[1], fh[0]);
     const double wx = qv[3], wy = qv[4], wz = qv[5];
 
@@ -242,6 +245,12 @@ struct WbcHandle {
     }
     matvec3(J_ax.data(), qv, v_ax);
     const double v_fwd = dot3(fh, v_ax);
+
+    // Turn-rate limiter: |v * omega| <= a_lat_max, using the larger of commanded
+    // and actual speed so an overspeeding robot cannot turn harder than intended.
+    const double w_cap = p.a_lat_max /
+                         std::max(std::max(std::fabs(v_target), std::fabs(v_fwd)), 1e-3);
+    yaw_target = clampd(yaw_target, -w_cap, w_cap);
 
     // ---- Wheel contacts (mean point / normal per wheel)
     double cpos[2][3] = {{0}}, cnrm[2][3] = {{0}}, nrm_w[2][3];
@@ -328,15 +337,34 @@ struct WbcHandle {
         pb[i] = a;
         mdq[i] = have_obs ? b / dt : 0.0;
       }
+      // wheel joint rows: p_w = (M qd)_w, driven by the applied wheel torque
+      double pw[2], mdqw[2];
+      for (int w = 0; w < 2; ++w) {
+        const int j = p.act_dof[p.wheel_act[w]];
+        double a = 0, b = 0;
+        for (int k = 0; k < nv; ++k) {
+          a += M[j * nv + k] * qv[k];
+          b += (M[j * nv + k] - M_prev[j * nv + k]) * qv[k];
+        }
+        pw[w] = a;
+        mdqw[w] = have_obs ? b / dt : 0.0;
+      }
       if (!have_obs) {                 // assume resting on the ground: tau_ext,b = h_b
         for (int i = 0; i < 6; ++i) {
           r_obs[i] = h[i];
           p_int[i] = pb[i] - r_obs[i] / p.obs_K;
         }
+        for (int w = 0; w < 2; ++w) pw_int[w] = pw[w];
         have_obs = true;
       }
       for (int i = 0; i < 6; ++i) r_obs[i] = p.obs_K * (pb[i] - p_int[i]);
       for (int i = 0; i < 6; ++i) p_int[i] += dt * (r_obs[i] - h[i] + mdq[i]);
+      double rw[2];
+      for (int w = 0; w < 2; ++w) {
+        const int a = p.wheel_act[w], j = p.act_dof[a];
+        rw[w] = p.obs_K * (pw[w] - pw_int[w]);
+        pw_int[w] += dt * (rw[w] - h[j] + mdqw[w] + last_tau[a]);
+      }
       std::copy(M.begin(), M.end(), M_prev.begin());
       // Solve (A^T A + lam I) F = A^T r with A[i][k] = Jc[k][i] (6x6)
       double N[36], rhs[6];
@@ -371,6 +399,21 @@ struct WbcHandle {
         F[c] = acc / N[c * 6 + c];
       }
       for (int w = 0; w < 2; ++w) Fn_est[w] = dot3(&F[3 * w], nrm_w[w]);
+      // Unmodeled wheel torque = wheel-row residual - contact contribution
+      // (Jc^T F) - the friction the feed-forward already assumes. Low-passed and
+      // cancelled on the output: absorbs damping, friction and motor-gain
+      // mismatch that otherwise shows up as a speed offset (and a lean the
+      // balance loop pays for in speed).
+      if (p.dist_comp != 0 && contact_state[0] && contact_state[1]) {
+        for (int w = 0; w < 2; ++w) {
+          const int a = p.wheel_act[w], j = p.act_dof[a];
+          double jf = 0;
+          for (int k = 0; k < 6; ++k) jf += Jc[k * nv + j] * F[k];
+          const double e = rw[w] - jf + p.fric[a] * std::tanh(qv[j] / p.fric_vel);
+          tau_dist[w] += std::min(1.0, dt / p.dist_T) * (e - tau_dist[w]);
+          tau_dist[w] = clampd(tau_dist[w], -p.dist_max, p.dist_max);
+        }
+      }
     }
     for (int w = 0; w < 2; ++w) {
       if (p.contact_from_load != 0) {
@@ -643,6 +686,10 @@ struct WbcHandle {
         double t = btau[a];
         for (int j = 0; j < nx; ++j) t += Atau[a * nx + j] * x[j];
         t += p.fric[a] * std::tanh(qv[p.act_dof[a]] / p.fric_vel);
+        if (p.dist_comp != 0) {
+          if (a == p.wheel_act[0]) t -= tau_dist[0];
+          if (a == p.wheel_act[1]) t -= tau_dist[1];
+        }
         last_tau[a] = clampd(t, p.tau_min[a], p.tau_max[a]);
       }
     }
@@ -663,6 +710,8 @@ struct WbcHandle {
       info[WBC_INFO_FN_R] = Fn_est[0];
       info[WBC_INFO_FN_L] = Fn_est[1];
       info[WBC_INFO_PHI_OFF] = phi_off;
+      info[WBC_INFO_DIST_R] = tau_dist[0];
+      info[WBC_INFO_DIST_L] = tau_dist[1];
       for (int k = 0; k < NC; ++k) info[WBC_INFO_FC + k] = ok ? x[nv + k] : 0.0;
       for (int j = 0; j < nv; ++j) info[WBC_INFO_QDD + j] = ok ? x[j] : 0.0;
     }

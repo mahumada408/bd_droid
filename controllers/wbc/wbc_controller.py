@@ -25,9 +25,13 @@ Bipedal Robot with Kinematic Loops", IEEE RA-L 2020):
      the line of support, and joint posture from a leg-IK table that is
      consistent with the commanded height.
 
-Base pitch is held level by the hips while the wheels balance the CoM. Wheel
-dry friction (MuJoCo frictionloss) is compensated feed-forward. Turns lean in by
-bank_gain * atan(v*w/g) and the turn command is limited to |v*w| <= a_lat_max.
+Base pitch is held level by the hips while the wheels balance the CoM; pitch
+and roll are measured about the body's own axes, so they are heading-invariant.
+Wheel dry friction (MuJoCo frictionloss) is compensated feed-forward, and the
+remaining unmodeled wheel torque (damping, friction / motor-gain mismatch) is
+estimated by the momentum observer's wheel rows and cancelled. Turns lean in by
+bank_gain * atan(v*w/g) and the turn command is limited to |v*w| <= a_lat_max,
+with v the larger of commanded and measured speed.
 The yaw-rate command is integrated into a heading reference (heading hold), so
 yaw disturbances are steered back out instead of leaving a permanent offset.
 Wheel contact is decided from the estimated normal load (generalized-momentum
@@ -124,6 +128,12 @@ class PyWholeBodyController:
     ki_lean = 1.0         # 1/s
     lean_off_max = 0.06   # rad
     lean_learn_vmax = 0.05  # m/s, learn only near standstill (driving e_s is tracking lag)
+    # Wheel disturbance compensation: the momentum observer's wheel-joint rows
+    # minus the contact contribution give the unmodeled wheel torque (damping,
+    # friction / motor-gain mismatch), which is low-passed and cancelled.
+    dist_comp = True
+    dist_T = 0.3          # s, low-pass time constant
+    dist_max = 0.5        # Nm, clamp
 
     def __init__(self, model: mujoco.MjModel, mu: float = 0.85):
         self.m = model
@@ -363,6 +373,8 @@ class PyWholeBodyController:
         self.t_low = [0.0, 0.0]
         self.Fn_est = np.zeros(2)
         self.phi_off = 0.0
+        self.pw_int = np.zeros(2)
+        self.tau_dist = np.zeros(2)
 
     # --------------------------------------------------------------- helpers
     def _point_jac(self, d, point, body):
@@ -406,17 +418,13 @@ class PyWholeBodyController:
         t0 = time.perf_counter()
         m, nv, nx = self.m, self.nv, self.nx
         qv = d.qvel
-        # Turn-rate limiter: |v * omega| <= a_lat_max keeps the inner wheel loaded
-        w_cap = self.a_lat_max / max(abs(v_target), 1e-3)
-        yaw_target = min(max(yaw_target, -w_cap), w_cap)
-
         # ---- Base state (heading frame: fh forward, rh right, both horizontal)
         R = d.xmat[1].reshape(3, 3)
         nf = math.hypot(R[0, 1], R[1, 1]) or 1e-6
         fh = np.array([R[0, 1] / nf, R[1, 1] / nf, 0.0])
         rh = np.array([fh[1], -fh[0], 0.0])
         theta = math.atan2(R[2, 1], R[2, 2])       # base pitch (+ = nose up)
-        roll = math.atan2(R[0, 2], R[2, 2])        # base roll (+ = lean right)
+        roll = math.atan2(-R[2, 0], R[2, 2])       # base roll about the forward axis (+ = lean right)
         wx, wy, wz = qv[3], qv[4], qv[5]
 
         # ---- Wheel hubs / axle midpoint
@@ -430,6 +438,10 @@ class PyWholeBodyController:
         axle = 0.5 * (d.xpos[rid] + d.xpos[lid])
         v_ax = J_ax @ qv
         v_fwd = float(fh @ v_ax)
+        # Turn-rate limiter: |v * omega| <= a_lat_max keeps the inner wheel loaded.
+        # Uses the larger of commanded and actual speed (overspeed must not turn harder).
+        w_cap = self.a_lat_max / max(abs(v_target), abs(v_fwd), 1e-3)
+        yaw_target = min(max(yaw_target, -w_cap), w_cap)
 
         # ---- Rolling contact. The material point at the contact has zero
         # TANGENTIAL acceleration (its normal acceleration is r*w^2 towards the
@@ -461,16 +473,29 @@ class PyWholeBodyController:
         mujoco.mj_fullM(m, d, self.M)
         h = d.qfrc_bias
         pb = self.M[:6] @ qv
+        wa = self.wheel_act
+        wj = [self.act_dof[a] for a in wa]
+        pw = self.M[wj] @ qv
         if self.p_int is None:
             self.p_int = pb - h[:6] / self.obs_K
+            self.pw_int = pw.copy()
             mdq = np.zeros(6)
+            mdqw = np.zeros(2)
         else:
             mdq = (self.M[:6] - self.M_prev[:6]) @ qv / dt
+            mdqw = (self.M[wj] - self.M_prev[wj]) @ qv / dt
         r_obs = self.obs_K * (pb - self.p_int)
         self.p_int = self.p_int + dt * (r_obs - h[:6] + mdq)
+        rw = self.obs_K * (pw - self.pw_int)
+        self.pw_int = self.pw_int + dt * (rw - h[wj] + mdqw + self.last_tau[wa])
         self.M_prev = self.M.copy()
         A = Jc[:, :6].T
         F = np.linalg.solve(A.T @ A + 1e-6 * np.eye(6), A.T @ r_obs)
+        # Unmodeled wheel torque (residual - Jc^T F - assumed friction), low-passed
+        if self.dist_comp and self.contact_state[0] and self.contact_state[1]:
+            e = rw - Jc[:, wj].T @ F + self.fric[wa] * np.tanh(qv[wj] / self.fric_vel)
+            self.tau_dist += min(1.0, dt / self.dist_T) * (e - self.tau_dist)
+            self.tau_dist = np.clip(self.tau_dist, -self.dist_max, self.dist_max)
         for w in range(2):
             self.Fn_est[w] = float(F[3 * w:3 * w + 3] @ nrms[w])
             if self.contact_from_load:
@@ -646,6 +671,8 @@ class PyWholeBodyController:
         if ok:
             tau = A_tau @ x + b_tau
             tau += self.fric * np.tanh(qv[ad] / self.fric_vel)
+            if self.dist_comp:
+                tau[self.wheel_act] -= self.tau_dist
             tau = np.clip(tau, self.tau_min, self.tau_max)
             Fc = x[nv:]
             self.last_tau = tau
@@ -667,6 +694,7 @@ class PyWholeBodyController:
             "heading_err": e_head,
             "Fn_est": self.Fn_est.copy(),
             "phi_off": self.phi_off,
+            "tau_dist": self.tau_dist.copy(),
             "qdd": x[:nv].copy() if ok else np.zeros(nv),
         }
         return tau, info
@@ -689,6 +717,7 @@ _GAIN_FIELDS = (
     "w_post", "w_post_roll", "w_tau", "w_qdd", "w_force", "w_ftan", "kv_slip",
     "contact_from_load", "obs_K", "fz_on", "fz_off", "contact_geom_dist",
     "ki_lean", "lean_off_max", "lean_learn_vmax",
+    "dist_comp", "dist_T", "dist_max",
 )
 
 
@@ -712,7 +741,7 @@ class _WbcParams(ctypes.Structure):
 
 # info vector layout (enum in wbc_params.h)
 (_I_STATUS, _I_US, _I_PHI, _I_PSI, _I_AAX, _I_PITCH, _I_ROLL, _I_CONT, _I_HEAD, _I_ITER,
- _I_FNR, _I_FNL, _I_PHIOFF, _I_FC) = range(14)
+ _I_FNR, _I_FNL, _I_PHIOFF, _I_DISTR, _I_DISTL, _I_FC) = range(16)
 _I_QDD = _I_FC + 6
 
 _LIB = None
@@ -856,6 +885,7 @@ class WholeBodyController(PyWholeBodyController):
             "qp_iter": int(I[_I_ITER]),
             "Fn_est": I[_I_FNR:_I_FNL + 1].copy(),
             "phi_off": I[_I_PHIOFF],
+            "tau_dist": I[_I_DISTR:_I_DISTL + 1].copy(),
             "qdd": I[_I_QDD:_I_QDD + nv].copy(),
         }
         return self._tau.copy(), info

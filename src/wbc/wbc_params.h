@@ -53,6 +53,7 @@ typedef struct WbcParams {
   double w_post, w_post_roll, w_tau, w_qdd, w_force, w_ftan, kv_slip;
   double contact_from_load, obs_K, fz_on, fz_off, contact_geom_dist;
   double ki_lean, lean_off_max, lean_learn_vmax;
+  double dist_comp, dist_T, dist_max;
 } WbcParams;
 
 // Layout of the info vector filled by wbc_step()
@@ -70,6 +71,8 @@ enum {
   WBC_INFO_FN_R,             // estimated normal load, N
   WBC_INFO_FN_L,
   WBC_INFO_PHI_OFF,          // learned lean offset, rad
+  WBC_INFO_DIST_R,           // estimated unmodeled wheel torque, Nm
+  WBC_INFO_DIST_L,
   WBC_INFO_FC,               // 6 values
   WBC_INFO_QDD = WBC_INFO_FC + 6,   // nv values
 };

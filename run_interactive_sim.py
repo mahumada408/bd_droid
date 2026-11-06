@@ -773,7 +773,7 @@ def main():
 
                             roll_terrain_offset = 0.0
                             if args.wavy:
-                                roll_now = float(np.arctan2(R[0, 2], R[2, 2]))
+                                roll_now = float(np.arctan2(-R[2, 0], R[2, 2]))   # about the forward axis
                                 roll_rate_now = float(d.qvel[4])
                                 roll_terrain_offset = float(np.clip(- (0.60 * roll_now + 0.05 * roll_rate_now), -0.25, 0.25))
 
@@ -862,7 +862,7 @@ def main():
                     r_wheel_z = d.xpos[5][2]
                     l_wheel_z = d.xpos[9][2]
                     h_diff = l_wheel_z - r_wheel_z
-                    roll_deg = np.degrees(np.arctan2(R[0, 2], R[2, 2]))
+                    roll_deg = np.degrees(np.arctan2(-R[2, 0], R[2, 2]))
                     ctrl_stat = f" | WBC={wbc_info['solve_time_us']:.0f}µs" if wbc_solver is not None else (f" | MPC={mpc_solve_time.value:.0f}µs" if mpc_lib is not None else "")
                     print(f"  [WAVY RUNWAY] t={d.time:5.2f}s | Pos X={d.qpos[0]:+.3f}m | Pos Y={d.qpos[1]:+.2f}m | R-wheel Z={r_wheel_z*100:4.1f}cm | L-wheel Z={l_wheel_z*100:4.1f}cm | Diff={h_diff*100:+4.1f}cm | Roll={roll_deg:+5.1f}° | Up-Z={R[2, 2]:.4f}{ctrl_stat}")
 

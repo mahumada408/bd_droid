@@ -70,6 +70,7 @@ class Scenario:
     yaw: Callable = zero
     dh: Callable = zero
     start: tuple = PLATFORM
+    yaw0: float = 0.0                     # initial heading (rad); 0 faces +y
     scene: str = "scene.xml"
     wavy: bool = False
     push: Optional[tuple] = None          # (t0, t1, wrench[6] world frame on the base)
@@ -84,6 +85,9 @@ SCENARIOS = [
              limits=dict(pitch_max=7.0)),
     Scenario("lat_push", 4.0, push=(1.0, 1.1, [4.0, 0, 0, 0, 0, 0]),
              limits=dict(roll_max=3.0)),
+    # Facing -y: catches attitude estimates that are only valid at heading 0
+    Scenario("roll_torque_back", 5.0, push=(1.0, 4.0, [0, 0, 0, 0, 0.25, 0]), start=FLOOR, yaw0=math.pi,
+             limits=dict(roll_max=2.5)),
     Scenario("yaw_push", 4.0, push=(1.0, 1.1, [0, 0, 0, 0, 0, 0.4]),
              limits=dict(heading_final=3.0)),
     Scenario("drive0.5", 5.0, v=step_at(0.5, 0.5), start=FLOOR,
@@ -101,15 +105,15 @@ SCENARIOS = [
     Scenario("turn_long", 12.0, v=step_at(0.5, 0.5), yaw=step_at(1.0, 1.0), start=FLOOR,
              limits=dict(roll_max=3.0)),
     Scenario("fast_turn", 8.0, v=step_at(0.5, 1.0), yaw=step_at(2.0, 1.4), start=FLOOR,
-             limits=dict(roll_max=9.0)),
+             limits=dict(roll_max=3.0)),
     Scenario("crouch_drive", 6.0, v=step_at(1.0, 0.6), dh=lambda t: -0.04 * min(1.0, t), start=FLOOR,
              limits=dict(v_rmse=0.1)),
     Scenario("stand_long", 15.0, start=FLOOR, limits=dict(pitch_rms=0.5, hiproll_max=0.05)),
     Scenario("extreme", 8.0, v=step_at(0.5, 1.5), yaw=step_at(3.0, 1.8), start=FLOOR,
-             limits=dict(roll_max=8.0)),
+             limits=dict(roll_max=5.0)),
     Scenario("slalom", 10.0, v=step_at(0.5, 0.8),
              yaw=lambda t: 1.5 * np.sign(np.sin(1.5 * t)) if t > 2.0 else 0.0, start=FLOOR,
-             limits=dict(roll_max=4.0)),
+             limits=dict(roll_max=2.0)),
     Scenario("max_cmd", 8.0, v=step_at(0.5, 2.0), yaw=step_at(3.0, 1.8), start=FLOOR,
              known_fail=True),
 ]
@@ -266,7 +270,7 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
         act = Actuators(pert, m)
     mujoco.mj_resetData(m, d)
     d.qpos[:3] = sc.start
-    d.qpos[3:7] = [1, 0, 0, 0]
+    d.qpos[3:7] = [math.cos(sc.yaw0 / 2), 0, 0, math.sin(sc.yaw0 / 2)]
     d.qpos[7:15] = HOME_LEGS
     mujoco.mj_forward(m, d)
     c = WBC(m_nom, **ctor_kw)
@@ -279,7 +283,7 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
         t = d.time
         R = d.xmat[1].reshape(3, 3)
         theta = math.atan2(R[2, 1], R[2, 2])
-        roll = math.atan2(R[0, 2], R[2, 2])
+        roll = math.atan2(-R[2, 0], R[2, 2])
         heading = math.atan2(R[1, 0], R[0, 0])
         if yaw0 is None:
             yaw0 = heading
@@ -295,7 +299,7 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
                 heading_c = math.atan2(Rc[1, 0], Rc[0, 0])
                 heading_cmd = float(np.clip(1.2 * (dc.qpos[0] - X_LANE), -0.2, 0.2))
                 yaw_cmd = float(np.clip(2.5 * (heading_cmd - heading_c), -0.6, 0.6))
-            roll_c = math.atan2(Rc[0, 2], Rc[2, 2])
+            roll_c = math.atan2(-Rc[2, 0], Rc[2, 2])
             roff = float(np.clip(-(0.6 * roll_c + 0.05 * dc.qvel[4]), -0.25, 0.25))
         d.xfrc_applied[:] = 0
         if sc.push and sc.push[0] <= t < sc.push[1]:
@@ -372,7 +376,7 @@ def run_robust(args, scen, ctor_kw):
             res[(name, k)] = r
     print(f"[robust] done in {time.time() - t0:.0f}s\n")
 
-    print(f"{'scenario':<15} {'survive':>8} {'in-limits':>9}   worst: pitch  roll   v_rmse  heading   fell (trial)")
+    print(f"{'scenario':<16} {'survive':>8} {'in-limits':>9}   worst: pitch  roll   v_rmse  heading   fell (trial)")
     fails_by_trial = {}
     total_fell = 0
     for sc in scen:
@@ -382,7 +386,7 @@ def run_robust(args, scen, ctor_kw):
         total_fell += 0 if sc.known_fail else len(fell)
         for k in fell:
             fails_by_trial.setdefault(k, []).append(sc.name)
-        print(f"{sc.name:<15} {100 * (1 - len(fell) / len(rs)):7.0f}% {100 * okl / len(rs):8.0f}%   "
+        print(f"{sc.name:<16} {100 * (1 - len(fell) / len(rs)):7.0f}% {100 * okl / len(rs):8.0f}%   "
               f"{max(r['pitch_max'] for r in rs):10.1f}° {max(r['roll_max'] for r in rs):5.1f}° "
               f"{max(r['v_rmse'] for r in rs):7.3f} {max(r['heading_final'] for r in rs):6.1f}°   "
               + " ".join(str(k) for k in fell)
@@ -438,7 +442,7 @@ def main():
         r = run(sc, WBC, ctor_kw, args.cad)
         bad = check(sc, r)
         verdict = "ok" if not bad else ("known-fail" if sc.known_fail else "FAIL")
-        print(f"{sc.name:<15} {verdict:<10} "
+        print(f"{sc.name:<16} {verdict:<10} "
               f"fell={'%.2fs' % r['fell'] if r['fell'] is not None else 'no':<6} "
               f"pitch rms/max={r['pitch_rms']:4.2f}/{r['pitch_max']:4.1f}° "
               f"roll_max={r['roll_max']:4.1f}° v_rmse={r['v_rmse']:.3f} "
