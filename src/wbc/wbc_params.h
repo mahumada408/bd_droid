@@ -1,5 +1,7 @@
 // Parameter block shared between the C++ whole-body controller and its Python
-// (ctypes) front-end in controllers/wbc/wbc_controller.py.
+// (ctypes) front-end in controllers/wbc/wbc_controller.py. Plain C so it can be
+// filled from Python, from a generated initializer (wbc_default_params.h) or
+// from firmware.
 //
 // Layout contract: the field order here MUST match WbcParams._fields_ in Python.
 // wbc_params_size() is checked against ctypes.sizeof() at load time.
@@ -23,7 +25,7 @@ typedef struct WbcParams {
   int act_qpos[WBC_MAX_ACT];       // qpos index per actuator
   int leg_idx[WBC_MAX_ACT];        // actuator index per leg joint
   int is_roll[WBC_MAX_ACT];        // per leg joint: 1 if hip roll
-  int wheel_body[2];               // right, left
+  int wheel_body[2];               // right, left (body index in robot_model.h)
   int wheel_act[2];                // actuator index per wheel body
 
   // ---- Model constants
@@ -51,17 +53,18 @@ typedef struct WbcParams {
   double max_bank, lim_T, bank_gain, a_lat_max, contact_hold, kd_wheel_air;
   double w_contact, w_axle, w_pitch, w_roll, w_yaw, w_height, w_lat;
   double w_post, w_post_roll, w_tau, w_qdd, w_force, w_ftan, kv_slip;
-  double contact_from_load, obs_K, fz_on, fz_off, contact_geom_dist;
+  double obs_K, fz_on, fz_off;
   double ki_lean, lean_off_max, lean_learn_vmax;
   double dist_comp, dist_T, dist_max;
   double fall_detect, fall_lean, fall_roll, fall_tilt, fall_T, fall_qp_T;
   double fall_kp, fall_kd, fall_kd_wheel, fall_tau_wheel, fall_recover_T;
+  double qp_warm_start, qp_iter_max, qp_mu0;   // HPIPM: 0 cold / 1 primal / 2 primal+dual
 } WbcParams;
 
 // Layout of the info vector filled by wbc_step()
 enum {
-  WBC_INFO_STATUS = 0,       // 0 ok (HPIPM status), <0 failed / fallback
-  WBC_INFO_SOLVE_US,
+  WBC_INFO_STATUS = 0,       // >=0 HPIPM status (0 ok), <0 failed / fallback
+  WBC_INFO_SOLVE_US,         // filled by the host wrapper (the core does no timing)
   WBC_INFO_PHI,
   WBC_INFO_PSI_REF,
   WBC_INFO_A_AXLE,

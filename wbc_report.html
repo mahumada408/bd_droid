@@ -1,0 +1,753 @@
+<title>Wheeled Biped WBC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<script>
+window.MathJax = {
+  tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]], tags: "none" },
+  svg: { fontCache: "global" },
+  options: { enableMenu: false }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js" defer></script>
+<style>
+/* Layout: engineering monograph. A sticky contents rail beside a single ~68ch reading column; equations sit on a faint drafting grid. */
+:root {
+  --paper: #f4f5f2;
+  --sheet: #fbfbf9;
+  --ink: #1b2430;
+  --ink-soft: #4a5566;
+  --rule: #d5d9d3;
+  --accent: #1d5c86;
+  --accent-wash: #e3edf3;
+  --warn: #a8432c;
+  --grid: rgba(29, 92, 134, 0.06);
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --step-0: 1.0625rem;
+  --step-1: 1.25rem;
+  --step-2: 1.6rem;
+  --step-3: 2.35rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #12171e;
+    --sheet: #171d26;
+    --ink: #dfe4ea;
+    --ink-soft: #9aa6b5;
+    --rule: #2c3644;
+    --accent: #79b3dc;
+    --accent-wash: #1c2b3a;
+    --warn: #e08a72;
+    --grid: rgba(121, 179, 220, 0.06);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #12171e;
+  --sheet: #171d26;
+  --ink: #dfe4ea;
+  --ink-soft: #9aa6b5;
+  --rule: #2c3644;
+  --accent: #79b3dc;
+  --accent-wash: #1c2b3a;
+  --warn: #e08a72;
+  --grid: rgba(121, 179, 220, 0.06);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 56px;
+  padding-block: 48px 96px;
+}
+nav.toc {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 24px);
+  align-self: start;
+  font-family: var(--f-display);
+  font-size: 0.92rem;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+nav.toc .lbl {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; counter-reset: s; }
+nav.toc li { counter-increment: s; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  display: grid;
+  grid-template-columns: 2.1em 1fr;
+  padding: 2px 0;
+}
+nav.toc a::before { content: "§" counter(s); color: var(--accent); font-variant-numeric: tabular-nums; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--ink); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+main { min-width: 0; }
+header.title { margin-bottom: 40px; display: grid; gap: 14px; max-width: 68ch; }
+.kicker {
+  font-family: var(--f-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+h1 {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: var(--step-3);
+  line-height: 1.1;
+  margin: 0;
+  text-wrap: balance;
+}
+.lede { color: var(--ink-soft); margin: 0; font-size: var(--step-1); line-height: 1.5; }
+.specs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  margin-top: 12px;
+  max-width: 68ch;
+}
+.specs div { background: var(--sheet); padding: 10px 14px; display: grid; gap: 2px; }
+.specs dt {
+  font-family: var(--f-display);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+}
+.specs dd { margin: 0; font-family: var(--f-mono); font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+
+section { counter-increment: sec; padding-top: 28px; margin-top: 28px; border-top: 1px solid var(--rule); }
+main { counter-reset: sec; }
+h2 {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: var(--step-2);
+  line-height: 1.2;
+  margin: 0 0 14px;
+  text-wrap: balance;
+  display: flex;
+  gap: 0.6em;
+  align-items: baseline;
+}
+h2::before {
+  content: "§" counter(sec);
+  font-family: var(--f-mono);
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+h3 {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: var(--step-1);
+  margin: 26px 0 8px;
+  text-wrap: balance;
+}
+p, ul, ol.plain { max-width: 68ch; }
+p { margin: 0 0 14px; }
+ul { padding-left: 1.2em; margin: 0 0 14px; }
+li { margin-bottom: 4px; }
+code, .mono { font-family: var(--f-mono); font-size: 0.88em; }
+code { background: var(--accent-wash); padding: 0 4px; border-radius: 3px; }
+
+.eq {
+  max-width: 68ch;
+  overflow-x: auto;
+  margin: 14px 0 18px;
+  padding: 10px 16px;
+  background-color: var(--sheet);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 14px 14px;
+  border-left: 2px solid var(--accent);
+}
+.eq mjx-container { margin: 6px 0 !important; }
+.where { font-size: 0.95rem; color: var(--ink-soft); }
+
+.note {
+  max-width: 68ch;
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 0.97rem;
+}
+.note .tag {
+  font-family: var(--f-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.75rem;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 4px;
+}
+.note.warn .tag { color: var(--warn); }
+
+.tbl { overflow-x: auto; max-width: 100%; margin: 14px 0 20px; }
+table { border-collapse: collapse; font-size: 0.93rem; min-width: 560px; width: 100%; }
+th, td { text-align: left; padding: 7px 12px 7px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--ink-soft);
+}
+td.num, td .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td.num { white-space: nowrap; }
+
+figure { margin: 18px 0 22px; max-width: 68ch; }
+figure svg { width: 100%; height: auto; display: block; background: var(--sheet); border: 1px solid var(--rule); }
+figcaption { font-size: 0.9rem; color: var(--ink-soft); margin-top: 8px; }
+
+.flow { display: grid; gap: 0; max-width: 68ch; margin: 14px 0 18px; border: 1px solid var(--rule); background: var(--sheet); }
+.flow div { display: grid; grid-template-columns: 2.4em 1fr; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule); }
+.flow div:last-child { border-bottom: 0; }
+.flow b { font-family: var(--f-mono); font-weight: 500; color: var(--accent); }
+
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 64px; }
+  nav.toc { position: static; max-height: none; border: 1px solid var(--rule); background: var(--sheet); padding: 12px 14px; }
+  nav.toc ol { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+}
+</style>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Contents">
+    <div class="lbl">Contents</div>
+    <ol>
+      <li><a href="#robot">Robot and notation</a></li>
+      <li><a href="#frames">Attitude and the heading frame</a></li>
+      <li><a href="#balance">Balance layer (LQR)</a></li>
+      <li><a href="#steer">Heading, turning, banking</a></li>
+      <li><a href="#contact">Rolling-contact model</a></li>
+      <li><a href="#observer">Momentum observer</a></li>
+      <li><a href="#dist">Wheel disturbance observer</a></li>
+      <li><a href="#qp">Whole-body QP</a></li>
+      <li><a href="#posture">Posture table</a></li>
+      <li><a href="#output">Torque output</a></li>
+      <li><a href="#safe">Safe fall</a></li>
+      <li><a href="#solver">Solvers</a></li>
+      <li><a href="#tick">One control tick</a></li>
+      <li><a href="#params">Parameters</a></li>
+      <li><a href="#validation">Validation</a></li>
+      <li><a href="#limits">Limitations</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="title">
+      <div class="kicker">bd_droid · src/wbc/wbc_core.cpp · src/wbc/rbd.cpp · controllers/wbc/wbc_controller.py</div>
+      <h1>LQR-assisted whole-body control of the wheeled biped</h1>
+      <p class="lede">The full mathematics of the controller on branch <code>wbc-cpp-robustness</code>: the models it uses, the estimators that feed it, the quadratic program it solves every 2 ms, and the safety layer around it.</p>
+      <dl class="specs">
+        <div><dt>Total mass</dt><dd>1.943 kg</dd></div>
+        <div><dt>DoF</dt><dd>n<sub>v</sub> = 14</dd></div>
+        <div><dt>Actuators</dt><dd>6 leg + 2 wheel</dd></div>
+        <div><dt>Control rate</dt><dd>500 Hz</dd></div>
+        <div><dt>Step time</dt><dd>~0.04 ms (x86)</dd></div>
+        <div><dt>Target MCU</dt><dd>STM32H743</dd></div>
+      </dl>
+    </header>
+
+    <section id="robot">
+      <h2>Robot and notation</h2>
+      <p>The model is a floating base with two legs. Each leg has a hip roll, a hip pitch and a knee joint, and ends in a driven wheel of radius \(r_w = 0.05\) m. MuJoCo integrates it at \(\Delta t = 2\) ms and the controller runs every step.</p>
+      <div class="eq">\[
+        q = \begin{bmatrix} p_b \\ \mathbf{q}_b \\ q_{\text{legs}} \\ q_{\text{wheels}} \end{bmatrix} \in \mathbb{R}^{15},
+        \qquad
+        \dot q = \begin{bmatrix} v_b \\ \omega_b \\ \dot q_{\text{legs}} \\ \dot q_{\text{wheels}} \end{bmatrix} \in \mathbb{R}^{14},
+        \qquad \tau \in \mathbb{R}^{8}
+      \]</div>
+      <p class="where">Here \(p_b\) is the base position, \(\mathbf q_b\) its unit quaternion, \(v_b\) its linear velocity in the world frame and \(\omega_b\) its angular velocity in the body frame. The base faces along its body \(y\) axis.</p>
+      <p>The rigid-body dynamics, as MuJoCo computes them, are</p>
+      <div class="eq">\[
+        M(q)\,\ddot q + h(q,\dot q) = S^\top \tau + J_c^\top F,
+        \qquad
+        S = \begin{bmatrix} 0_{8\times 6} & I_8 \end{bmatrix}
+      \]</div>
+      <p class="where">\(M\) is the joint-space inertia, \(h\) collects Coriolis, centrifugal and gravity terms (<code>qfrc_bias</code>), \(J_c \in \mathbb{R}^{6\times 14}\) stacks the two wheel contact-point Jacobians and \(F = [F_R^\top\; F_L^\top]^\top\) the two 3D contact forces. The rows split into the unactuated floating base (subscript \(b\), rows 1–6) and the actuated joints (subscript \(a\)).</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Actuator</th><th>Joint range (rad)</th><th>Torque limit</th></tr></thead>
+        <tbody>
+          <tr><td>Hip roll R / L</td><td class="num">[−0.6, 0.6]</td><td class="num">±15 N·m</td></tr>
+          <tr><td>Hip pitch R / L</td><td class="num">[−1.0, 1.5] / [−1.5, 1.0]</td><td class="num">±15 N·m</td></tr>
+          <tr><td>Knee R / L</td><td class="num">[−0.75, 1.2] / [−1.2, 0.75]</td><td class="num">±15 N·m</td></tr>
+          <tr><td>Wheel R / L</td><td class="num">continuous</td><td class="num">±5 N·m</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="frames">
+      <h2>Attitude and the heading frame</h2>
+      <p>Let \(R = [R_{ij}]\) be the base rotation matrix (columns are the body axes in world coordinates). The controller works in a horizontal <em>heading frame</em> built from the body's forward axis:</p>
+      <div class="eq">\[
+        f_h = \frac{1}{\sqrt{R_{01}^2 + R_{11}^2}}\begin{bmatrix} R_{01} \\ R_{11} \\ 0 \end{bmatrix},
+        \qquad
+        r_h = \begin{bmatrix} f_{h,y} \\ -f_{h,x} \\ 0 \end{bmatrix},
+        \qquad
+        \text{yaw} = \operatorname{atan2}(f_{h,y}, f_{h,x})
+      \]</div>
+      <p>Pitch and roll are both measured about the body's own axes, from the components of the world vertical in the body frame:</p>
+      <div class="eq">\[
+        \theta = \operatorname{atan2}(R_{21}, R_{22}),
+        \qquad
+        \psi = \operatorname{atan2}(-R_{20}, R_{22})
+      \]</div>
+      <div class="note warn">
+        <span class="tag">Fixed bug</span>
+        The original roll was \(\operatorname{atan2}(R_{02}, R_{22})\), which is the tilt of the body \(z\) axis toward world \(x\). That equals roll only while the robot faces \(+y\). After a half turn its sign flips and the roll loop becomes positive feedback. The form above uses the third row of \(R\), the world vertical seen from the body, so it does not depend on heading.
+      </div>
+      <p>The axle midpoint and its velocity come from the two wheel-hub Jacobians \(J_{\text{hub},R}, J_{\text{hub},L} \in \mathbb{R}^{3\times 14}\):</p>
+      <div class="eq">\[
+        p_{ax} = \tfrac12\left(p_{\text{hub},R} + p_{\text{hub},L}\right),
+        \quad
+        J_{ax} = \tfrac12\left(J_{\text{hub},R} + J_{\text{hub},L}\right),
+        \quad
+        v_{ax} = J_{ax}\dot q,
+        \quad
+        v_{\text{fwd}} = f_h^\top v_{ax}
+      \]</div>
+    </section>
+
+    <section id="balance">
+      <h2>Balance layer (LQR)</h2>
+      <p>Balance is handled by a wheeled inverted pendulum whose state is the lean of the <em>whole-body</em> centre of mass over the axle, not the base pitch. The hips keep the base level while the wheels move the axle under the CoM.</p>
+
+      <figure>
+        <svg viewBox="0 0 520 250" role="img" aria-label="Side view: wheel on the ground, leg up to a level base, centre of mass above and ahead of the axle at lean angle phi.">
+          <line x1="20" y1="215" x2="500" y2="215" stroke="currentColor" stroke-width="1.5" style="color: var(--ink-soft)"/>
+          <circle cx="210" cy="190" r="25" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--ink)"/>
+          <circle cx="210" cy="190" r="3" fill="currentColor" style="color: var(--ink)"/>
+          <polyline points="210,190 180,135 232,92" fill="none" stroke="currentColor" stroke-width="3" style="color: var(--ink-soft)"/>
+          <rect x="190" y="70" width="110" height="24" rx="3" fill="currentColor" style="color: var(--accent-wash)"/>
+          <rect x="190" y="70" width="110" height="24" rx="3" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--ink)"/>
+          <line x1="210" y1="190" x2="210" y2="40" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1" style="color: var(--ink-soft)"/>
+          <line x1="210" y1="190" x2="246" y2="76" stroke="currentColor" stroke-width="1.8" style="color: var(--accent)"/>
+          <circle cx="246" cy="76" r="6" fill="currentColor" style="color: var(--accent)"/>
+          <path d="M210,140 A50,50 0 0 1 225,142" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--accent)"/>
+          <text x="226" y="132" font-size="15" fill="currentColor" style="color: var(--accent); font-family: var(--f-body); font-style: italic">φ</text>
+          <text x="256" y="70" font-size="13" fill="currentColor" style="color: var(--ink); font-family: var(--f-mono)">CoM</text>
+          <text x="150" y="196" font-size="13" fill="currentColor" style="color: var(--ink); font-family: var(--f-mono)">axle</text>
+          <line x1="300" y1="190" x2="370" y2="190" stroke="currentColor" stroke-width="1.5" style="color: var(--ink)"/>
+          <polygon points="370,185 380,190 370,195" fill="currentColor" style="color: var(--ink)"/>
+          <text x="388" y="194" font-size="13" fill="currentColor" style="color: var(--ink); font-family: var(--f-mono)">f_h (forward)</text>
+          <line x1="70" y1="190" x2="70" y2="130" stroke="currentColor" stroke-width="1.5" style="color: var(--ink)"/>
+          <polygon points="65,130 70,120 75,130" fill="currentColor" style="color: var(--ink)"/>
+          <text x="78" y="128" font-size="13" fill="currentColor" style="color: var(--ink); font-family: var(--f-mono)">z</text>
+          <text x="20" y="238" font-size="12" fill="currentColor" style="color: var(--ink-soft); font-family: var(--f-mono)">ground · wheel r = 0.05 m · CoM height over axle l = 0.135 m</text>
+        </svg>
+        <figcaption>Side view in the heading frame. φ is positive when the whole-body CoM is ahead of the axle.</figcaption>
+      </figure>
+
+      <h3>Lean and lean rate</h3>
+      <p>With \(\rho = p_{\text{com}} - p_{ax}\) and \(\dot\rho = J_{\text{com}}\dot q - v_{ax}\) (the subtree CoM Jacobian of the base body):</p>
+      <div class="eq">\[
+        \rho_f = f_h^\top \rho,\quad \rho_z = e_z^\top \rho,
+        \qquad
+        \varphi = \operatorname{atan2}(\rho_f, \rho_z),
+        \qquad
+        \dot\varphi = \frac{(f_h^\top\dot\rho)\,\rho_z - \rho_f\,\dot\rho_z}{\max(\rho_f^2 + \rho_z^2,\; 10^{-6})}
+      \]</div>
+
+      <h3>Pendulum model</h3>
+      <p>At start-up the controller builds the model from the real mass distribution at the home pose: total mass \(m\), CoM height above the axle \(l\), and composite pitch inertia about the CoM</p>
+      <div class="eq">\[
+        I_c = \sum_{b} \left( a^\top R_b I_b R_b^\top a + m_b\left(\lVert r_b\rVert^2 - (r_b^\top a)^2\right) \right),
+        \qquad a = \frac{f \times e_z}{\lVert f \times e_z\rVert},\quad r_b = p_b - p_{\text{com}}
+      \]</div>
+      <p>Linearised about upright with the axle acceleration \(u = \ddot s\) as input, the state \(x = [\,s,\ v,\ \varphi,\ \dot\varphi\,]^\top\) evolves as</p>
+      <div class="eq">\[
+        \dot x = A x + B u,
+        \qquad
+        A = \begin{bmatrix} 0&1&0&0\\ 0&0&0&0\\ 0&0&0&1\\ 0&0&\dfrac{m g l}{J}&0 \end{bmatrix},
+        \quad
+        B = \begin{bmatrix} 0\\ 1\\ 0\\ -\dfrac{m l}{J} \end{bmatrix},
+        \quad
+        J = I_c + m l^2
+      \]</div>
+      <p class="where">For this robot \(m = 1.943\) kg, \(l = 0.135\) m and \(I_c = 0.0145\) kg·m², so \(mgl/J \approx 51.5\ \text{s}^{-2}\) (time constant about 0.14 s) and \(ml/J \approx 5.3\ \text{m}^{-1}\).</p>
+      <p>The gain comes from the continuous algebraic Riccati equation with \(Q = \operatorname{diag}(30, 40, 100, 2)\) and \(R = 1\):</p>
+      <div class="eq">\[
+        A^\top P + P A - P B R^{-1} B^\top P + Q = 0,
+        \qquad
+        K = R^{-1}B^\top P \approx \begin{bmatrix} -5.48 & -8.84 & -43.99 & -6.13 \end{bmatrix}
+      \]</div>
+
+      <h3>References, feed-forward and the axle command</h3>
+      <p>The position reference integrates the commanded speed in the heading frame, so standstill is a true position hold even after turning. Position error is clamped, and the reference is dragged along when the clamp is active (anti-windup after a push):</p>
+      <div class="eq">\[
+        s \mathrel{+}= v_{\text{fwd}}\Delta t,\quad s_{\text{ref}} \mathrel{+}= v_t \Delta t,
+        \qquad
+        e_s = \operatorname{clamp}(s - s_{\text{ref}},\ \pm 0.25\ \text{m})
+      \]</div>
+      <p>Both integrators freeze while no wheel touches the ground. The commanded acceleration is a filtered derivative of \(v_t\), used as feed-forward together with its steady-state lean:</p>
+      <div class="eq">\[
+        a_{\text{ref}} \mathrel{+}= \min(1, 30\Delta t)\left(\frac{v_t - v_t^{-}}{\Delta t} - a_{\text{ref}}\right),
+        \qquad
+        a_{ff} = \operatorname{clamp}(a_{\text{ref}},\ \pm 1.5)
+      \]</div>
+      <div class="eq">\[
+        u_{fb} = -K\begin{bmatrix} e_s \\ v_{\text{fwd}} - v_t \\ \varphi - \varphi_{\text{off}} - \arctan(a_{ff}/g) \\ \dot\varphi \end{bmatrix},
+        \qquad
+        a_{ax} = \operatorname{clamp}(a_{ff} + u_{fb},\ \pm 4\ \text{m/s}^2)
+      \]</div>
+      <p>\(a_{ax}\) becomes the target of the axle-acceleration task in the QP (§8).</p>
+
+      <h3>Lean-offset learning</h3>
+      <p>An IMU tilt bias or a CoM error leaves a standing lean offset, which shows up as a slow creep in \(e_s\). A PI action on position, routed through the lean channel, learns it:</p>
+      <div class="eq">\[
+        \varphi_{\text{off}} \leftarrow \operatorname{clamp}\!\left(\varphi_{\text{off}} - \Delta t\, k_i \frac{K_0}{K_2} e_s,\ \pm 0.06\ \text{rad}\right),
+        \qquad k_i = 1\ \text{s}^{-1}
+      \]</div>
+      <p>It updates only when both wheels are loaded, the position clamp is inactive, \(|v_t| \lt 0.05\) m/s, \(|\omega_t| \lt 0.1\) rad/s and \(|a_{\text{ref}}| \lt 0.1\). While driving, \(e_s\) is mostly tracking lag, which is not an offset.</p>
+    </section>
+
+    <section id="steer">
+      <h2>Heading, turning and banking</h2>
+      <h3>Turn-rate limit</h3>
+      <p>The yaw-rate command is limited so the lateral acceleration stays under \(a_{\text{lat,max}} = 2.5\ \text{m/s}^2\). The speed used is the larger of the commanded and the measured one, so an overspeeding robot cannot turn harder than intended:</p>
+      <div class="eq">\[
+        \omega_t \leftarrow \operatorname{clamp}\!\left(\omega_t,\ \pm\frac{a_{\text{lat,max}}}{\max(|v_t|,\ |v_{\text{fwd}}|,\ 10^{-3})}\right)
+      \]</div>
+      <h3>Heading hold</h3>
+      <p>The rate command is integrated into a heading reference, so yaw disturbances are steered back out instead of leaving a permanent offset:</p>
+      <div class="eq">\[
+        \Psi_{\text{ref}} \mathrel{+}= \omega_t \Delta t,
+        \qquad
+        e_\Psi = \operatorname{wrap}(\text{yaw} - \Psi_{\text{ref}}),
+        \qquad
+        \omega_{\text{ref}} = \omega_t - k_\Psi\, e_\Psi
+      \]</div>
+      <p class="where">\(k_\Psi = 4\ \text{s}^{-1}\). If \(|e_\Psi| \gt 0.5\) rad the reference is dragged so the error stays at the limit. The reference resets to the measured yaw while airborne.</p>
+      <h3>Bank reference</h3>
+      <p>In a turn the robot leans in by a fraction of the ZMP-neutral angle, plus any terrain offset from the caller:</p>
+      <div class="eq">\[
+        \psi_{\text{ref}} = \operatorname{clamp}\!\left(-k_b \arctan\frac{v_t\,\omega_t}{g} + \psi_{\text{terrain}},\ \pm 0.30\ \text{rad}\right),
+        \qquad k_b = 0.25
+      \]</div>
+    </section>
+
+    <section id="contact">
+      <h2>Rolling-contact model</h2>
+      <p>The controller has no collision detection (it must run on a microcontroller), so each wheel is a thin disk of radius \(r_w\) on flat ground. With \(a\) the wheel's spin axis in world coordinates, the contact point is the rim point closest to the ground and the normal is vertical:</p>
+      <div class="eq">\[
+        u = \frac{e_z - (e_z^\top a)\,a}{\lVert e_z - (e_z^\top a)\,a \rVert},
+        \qquad
+        p_c = p_{\text{hub}} - r_w\, u,
+        \qquad
+        n = e_z
+      \]</div>
+      <p>Two tangent directions follow from the heading frame:</p>
+      <div class="eq">\[
+        t_1 = \frac{n \times f_h}{\lVert n \times f_h\rVert}\ \ (\text{lateral}),
+        \qquad
+        t_2 = t_1 \times n\ \ (\text{rolling direction})
+      \]</div>
+      <p>A wheel that rolls without slipping has zero contact-point velocity along \(t_1, t_2\), and its hub does not move along \(n\). Differentiating gives three acceleration rows per wheel. Slip-velocity damping \(k_v = 20\ \text{s}^{-1}\) pulls any accumulated slip back to zero:</p>
+      <div class="eq">\[
+        t_i^\top J_c\, \ddot q = -\,t_i^\top \dot J_c \dot q - k_v\, t_i^\top J_c \dot q,\quad i = 1,2;
+        \qquad
+        n^\top J_{\text{hub}}\, \ddot q = -\,n^\top \dot J_{\text{hub}} \dot q - k_v\, n^\top J_{\text{hub}} \dot q
+      \]</div>
+      <p>Stacking both wheels gives \(J_k \ddot q = b_k\) with \(J_k \in \mathbb{R}^{6\times 14}\). These are weighted tasks (weight \(10^4\)), not hard equalities, so the QP stays feasible when the contact geometry is noisy.</p>
+    </section>
+
+    <section id="observer">
+      <h2>Momentum observer and contact state</h2>
+      <p>Geometric contact distance is unreliable: an attitude error can make a loaded wheel look airborne. Contact is instead decided from the estimated wheel load, using a generalized-momentum observer. With \(p = M\dot q\),</p>
+      <div class="eq">\[
+        \dot p = \tau_{\text{act}} + \tau_{\text{ext}} - h + \dot M \dot q
+      \]</div>
+      <p>The observer integrates the model side and treats the residual \(r\) as the external torque estimate, a first-order filter of \(\tau_{\text{ext}}\) with bandwidth \(K_O = 40\ \text{s}^{-1}\):</p>
+      <div class="eq">\[
+        r = K_O\left(p - \hat p\right),
+        \qquad
+        \dot{\hat p} = r - h + \dot M\dot q + \tau_{\text{act}},
+        \qquad
+        \dot r = K_O(\tau_{\text{ext}} - r)
+      \]</div>
+      <p class="where">\(\dot M \dot q\) is a backward difference of \(M\) between ticks. On the first tick the robot is assumed at rest on the ground, \(r_b = h_b\).</p>
+      <p>The six floating-base rows carry no actuator torque or joint friction, so their residual depends only on the contact forces: \(r_b = J_{c,b}^\top F\) with \(J_{c,b}\) the base columns of \(J_c\) (a \(6\times 6\) block). The forces follow from a damped least-squares solve, and the load per wheel is the normal component:</p>
+      <div class="eq">\[
+        \left(J_{c,b} J_{c,b}^\top + \lambda I\right) \hat F = J_{c,b}\, r_b,
+        \qquad \lambda = 10^{-6},
+        \qquad
+        \hat F_{n,w} = n_w^\top \hat F_w
+      \]</div>
+      <p>Contact uses hysteresis: a wheel leaves contact after \(\hat F_n \lt 1\) N for 40 ms and regains it as soon as \(\hat F_n \gt 3\) N.</p>
+    </section>
+
+    <section id="dist">
+      <h2>Wheel disturbance observer</h2>
+      <p>The same observer is run on the two wheel-joint rows, where the applied wheel torque is known (the previous command, gear ratio 1). Removing the contact contribution and the friction the feed-forward already assumes leaves the unmodelled wheel torque: damping, friction error, motor-gain mismatch.</p>
+      <div class="eq">\[
+        e_w = r_w - \left(J_c^\top \hat F\right)_w + f_w \tanh\!\left(\frac{\dot q_w}{v_f}\right)
+      \]</div>
+      <div class="eq">\[
+        \hat\tau_{d,w} \leftarrow \operatorname{clamp}\!\left(\hat\tau_{d,w} + \min\!\left(1, \tfrac{\Delta t}{T_d}\right)(e_w - \hat\tau_{d,w}),\ \pm 0.5\ \text{N·m}\right),
+        \qquad T_d = 0.3\ \text{s}
+      \]</div>
+      <p>It updates only while both wheels are in contact, and \(\hat\tau_{d,w}\) is subtracted from the wheel command (§10). Without it, extra wheel drag made the robot lean forward, and the balance loop paid for that lean with speed: 1.5–2.3 m/s at a 1.0 m/s command.</p>
+    </section>
+
+    <section id="qp">
+      <h2>Whole-body QP</h2>
+      <p>The decision variable holds the generalized accelerations and the two contact forces. Torques are eliminated analytically through the actuated rows of the dynamics:</p>
+      <div class="eq">\[
+        x = \begin{bmatrix} \ddot q \\ F \end{bmatrix} \in \mathbb{R}^{20},
+        \qquad
+        \tau(x) = M_a \ddot q + h_a - J_{c,a}^\top F = A_\tau x + b_\tau
+      \]</div>
+
+      <h3>Cost</h3>
+      <div class="eq">\[
+        \min_x\ \sum_{i} w_i \left\lVert J_i \ddot q - b_i \right\rVert^2
+        + \sum_{j \in \text{legs}} w_{p} \left(\ddot q_j - a^{\text{post}}_j\right)^2
+        + w_\tau \lVert \tau(x) \rVert^2
+        + w_{\ddot q}\lVert \ddot q\rVert^2 + w_F \lVert F\rVert^2
+        + w_t \sum_{w} \left\lVert P_h F_w \right\rVert^2
+      \]</div>
+      <p class="where">\(P_h = f_h f_h^\top + r_h r_h^\top\) projects onto the horizontal heading axes. Penalising tangential force removes the internal "squeeze" the two wheels could otherwise exert on each other. With both wheels down, a tiny term \(10^{-4}(F_{z,w} - mg/2)^2\) breaks the tie in the load split.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Task</th><th>Row \(J_i\ddot q\)</th><th>Target \(b_i\)</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr><td>Rolling contact (per wheel in contact)</td><td>\(J_k \ddot q\)</td><td>\(b_k\) (§5)</td><td class="num">10⁴</td></tr>
+          <tr><td>Axle acceleration</td><td>\(f_h^\top J_{ax}\ddot q\)</td><td>\(a_{ax} - f_h^\top \dot J_{ax}\dot q\)</td><td class="num">200</td></tr>
+          <tr><td>Base pitch</td><td>\(\dot\omega_{x}\)</td><td>\(-k_{p\theta}\theta - k_{d\theta}\omega_x\)</td><td class="num">50</td></tr>
+          <tr><td>Base roll</td><td>\(\dot\omega_{y}\)</td><td>\(-k_{p\psi}(\psi - \psi_{\text{ref}}) - k_{d\psi}\omega_y\)</td><td class="num">50</td></tr>
+          <tr><td>Yaw rate</td><td>\(\dot\omega_{z}\)</td><td>\(k_{\omega}(\omega_{\text{ref}} - \omega_z)\)</td><td class="num">100</td></tr>
+          <tr><td>Base height over axle</td><td>\(\ddot z_b - e_z^\top J_{ax}\ddot q\)</td><td>\(k_{ph}(h_0 + \delta h - h) - k_{dh}\dot h + e_z^\top\dot J_{ax}\dot q\)</td><td class="num">50</td></tr>
+          <tr><td>Lateral CoM over support</td><td>\(r_h^\top(J_{\text{com}} - J_{ax})\ddot q\)</td><td>\(k_{py}(y_0 + \rho_z\tan\psi_{\text{ref}} - r_h^\top\rho) - k_{dy}r_h^\top\dot\rho - r_h^\top\dot J_{ax}\dot q\)</td><td class="num">50</td></tr>
+          <tr><td>Leg posture (6 joints)</td><td>\(\ddot q_j\)</td><td>\(a^{\text{post}}_j = k_{pp}(q^{\text{ref}}_j(\delta h) - q_j) - k_{dp}\dot q_j\)</td><td class="num">1</td></tr>
+        </tbody>
+      </table></div>
+      <p class="where">Gains: \(k_{p\theta} = k_{p\psi} = 150\), \(k_{d\theta} = k_{d\psi} = 20\), \(k_\omega = 100\), \(k_{ph} = 200\), \(k_{dh} = 25\), \(k_{py} = 120\), \(k_{dy} = 22\), \(k_{pp} = 60\), \(k_{dp} = 12\). \(h = z_b - z_{ax}\), \(h_0 = -0.0128\) m and \(y_0 = -0.0053\) m are the nominal values at the home pose (the model is slightly asymmetric). \(\delta h\) is the commanded height offset, clamped to the posture table range.</p>
+
+      <h3>Constraints</h3>
+      <p>Floating-base dynamics (hard equality, 6 rows):</p>
+      <div class="eq">\[
+        M_b \ddot q - J_{c,b}^\top F = -h_b
+      \]</div>
+      <p>Actuator torque limits, friction pyramids with \(\mu = 0.85\), and normal-force bounds with \(F_{\max} = 60\) N:</p>
+      <div class="eq">\[
+        \tau_{\min} \le A_\tau x + b_\tau \le \tau_{\max},
+        \qquad
+        |F_{w,x}| \le \mu F_{w,z},\ \ |F_{w,y}| \le \mu F_{w,z},
+        \qquad
+        0 \le F_{w,z} \le F_{\max}
+      \]</div>
+      <p>For a wheel that is <strong>airborne</strong>, its force is fixed to zero, its torque limit is dropped, and its torque is pinned to a speed-matching law that spins it to ground speed for touchdown:</p>
+      <div class="eq">\[
+        F_w = 0,
+        \qquad
+        \tau_w(x) = \operatorname{clamp}\!\left(-k_{\text{air}}(\dot q_w - \dot q_w^{\text{ref}})\right) - f_w\tanh\!\left(\frac{\dot q_w}{v_f}\right),
+        \qquad
+        \dot q_w^{\text{ref}} = -\frac{v_{\text{fwd}}}{k_w}
+      \]</div>
+      <p class="where">\(k_{\text{air}} = 0.02\) N·m·s/rad and \(k_w\) is the wheel-joint entry of that wheel's rolling row \(t_2^\top J_c\). The QP therefore exists in three sizes (0, 1 or 2 wheels airborne), each preallocated.</p>
+      <p>Leg joint limits use a look-ahead over \(T = 0.06\) s. The predicted position \(q + \dot q T + \tfrac12 \ddot q T^2\) must stay inside the range shrunk by a 0.05 rad margin:</p>
+      <div class="eq">\[
+        \frac{2}{T^2}\left(q_{lo} - q - \dot q T\right) \le \ddot q_j \le \frac{2}{T^2}\left(q_{hi} - q - \dot q T\right)
+      \]</div>
+      <p class="where">Both bounds are clipped to \(\pm 10^3\). If a joint is already past its margin and the bounds cross, a band of \(\pm 0.5\ \text{rad/s}^2\) around their midpoint keeps the problem feasible.</p>
+    </section>
+
+    <section id="posture">
+      <h2>Posture table</h2>
+      <p>The leg posture targets must agree with the commanded base height, or the posture task fights the height task. At start-up an IK table is built over \(\delta h \in [-0.08, 0.04]\) m on 25 grid points. For each point both hubs are moved by \(-\delta h\) in \(z\) under a level base, keeping their fore-aft and lateral positions. Each leg is solved by damped least squares on its three joints:</p>
+      <div class="eq">\[
+        \Delta q = J^\top \left(J J^\top + 10^{-6} I\right)^{-1} (p^\star_{\text{hub}} - p_{\text{hub}}),
+        \qquad
+        q \leftarrow \operatorname{clamp}(q + \Delta q,\ [q_{lo}, q_{hi}])
+      \]</div>
+      <p>Points that do not converge to 1 mm are dropped, which leaves 20 rows covering \(\delta h \in [-0.080, 0.015]\) m. At run time \(q^{\text{ref}}(\delta h)\) is linear interpolation between rows. Safe fall (§11) uses the lowest row as its tuck pose.</p>
+    </section>
+
+    <section id="output">
+      <h2>Torque output</h2>
+      <p>Joint dry friction (MuJoCo <code>frictionloss</code>, 0.1 N·m on the wheels) is invisible to the rigid-body model and would eat much of the wheel torque budget. It is fed forward with a smooth sign, on the wheels only. On the near-static leg joints the same feed-forward acts as strong negative damping. The disturbance estimate is subtracted and the result is clamped:</p>
+      <div class="eq">\[
+        \tau = \operatorname{clamp}\!\left(A_\tau x^\star + b_\tau + f \odot \tanh\!\left(\frac{\dot q_a}{v_f}\right) - \hat\tau_d,\ [\tau_{\min}, \tau_{\max}]\right),
+        \qquad v_f = 0.05\ \text{rad/s}
+      \]</div>
+      <p>If the solve fails, the previous command is held for that tick.</p>
+    </section>
+
+    <section id="safe">
+      <h2>Safe fall</h2>
+      <p>When a fall can no longer be prevented, the controller stops fighting it. Without this layer the QP kept driving the wheels after the robot was down: the robot hit at up to 4.8 m/s, then slid across the floor with its wheels at up to 540 rad/s.</p>
+      <h3>Detection</h3>
+      <p>The trigger latches when any of these conditions persists for \(T_f = 20\) ms:</p>
+      <div class="eq">\[
+        \underbrace{\left|\varphi - \varphi_{\text{off}} - \arctan\frac{a_{ff}}{g}\right| \gt 0.52}_{\text{lean, }30^\circ}
+        \quad\lor\quad
+        \underbrace{|\psi - \psi_{\text{ref}}| \gt 0.26}_{\text{roll, }15^\circ}
+        \quad\lor\quad
+        \underbrace{R_{22} \lt \cos 0.6}_{\text{tilt, }34^\circ}
+      \]</div>
+      <p>It also latches if the QP has failed on every tick for 50 ms. The cause is reported as <code>info["safe_fall"]</code>: 1 lean, 2 roll, 3 tilt, 4 QP.</p>
+      <p>The thresholds were set from data. Across 380 perturbed runs that the robot survives, the largest values reached were 20.3° lean error and 9° roll. Detection fires 0.10–0.15 s before the body touches the ground.</p>
+      <h3>Protective law</h3>
+      <p>No QP is solved. The legs tuck to the lowest posture row under soft joint PD, and the wheels brake:</p>
+      <div class="eq">\[
+        \tau_j = \operatorname{clamp}\!\left(k_f\left(q^{\text{ref}}_j(\delta h_{\min}) - q_j\right) - d_f \dot q_j\right),
+        \qquad
+        \tau_w = \operatorname{clamp}\!\left(-d_w \dot q_w,\ \pm 1.5\ \text{N·m}\right)
+      \]</div>
+      <p class="where">\(k_f = 5\) N·m/rad, \(d_f = 0.2\) N·m·s/rad, \(d_w = 0.05\) N·m·s/rad. Varying these over 3× changed impact speed less than run-to-run noise.</p>
+      <h3>Recovery</h3>
+      <p>The estimators keep running. Balancing resumes, with a full reset of internal state, after the robot has been upright and still for 1 s: \(|\theta|, |\psi|, |\varphi| \lt 0.15\) rad, both wheels loaded and \(|\omega_x|, |\omega_y| \lt 0.5\) rad/s. A <code>reset()</code> call (Backspace in sim_gui) also clears it.</p>
+    </section>
+
+    <section id="solver">
+      <h2>Solvers</h2>
+      <p>The production path is the C++ core (<code>src/wbc/wbc_core.cpp</code>). It takes only \(q\) and \(\dot q\) and computes \(M\), \(h\), the Jacobians, \(\dot J\dot q\) and the CoM itself (<code>src/wbc/rbd.cpp</code>), from a model generated out of <code>robot.xml</code>. These match MuJoCo to about \(10^{-14}\). The core has no heap allocation and no OS calls, and cross-compiles for the STM32H743. The simulator runs the same code through <code>//:libwbc.so</code>.</p>
+      <p>The QP is solved by HPIPM's dense interior-point method in <code>BALANCE</code> mode, with at most 40 iterations and all tolerances \(10^{-7}\). Each solve is <strong>warm-started</strong> from the previous tick's primal and dual solution. That averages 2.2 iterations per tick (p99 3, max 13), against 7.8 (p99 12, max 40) from a cold start, with the same torques to \(3\times 10^{-7}\) N·m. HPIPM takes the problem as</p>
+      <div class="eq">\[
+        \min_x \tfrac12 x^\top H x + g^\top x
+        \quad\text{s.t.}\quad
+        A_{eq} x = b,\quad
+        \underline{x}_{\mathcal I} \le x_{\mathcal I} \le \overline{x}_{\mathcal I},\quad
+        \underline{d} \le C x \le \overline{d}
+      \]</div>
+      <p class="where">\(H = 2P\) is symmetrised from the stacked cost. The box constraints \(x_{\mathcal I}\) cover the leg accelerations and the two \(F_z\) components. \(C\) holds the torque rows and the eight one-sided friction rows. Airborne-wheel conditions add 4 equality rows per wheel.</p>
+      <div class="note">
+        <span class="tag">Solver recovery</span>
+        Rarely (about one tick in 4,000 under heavy disturbance) a solve returns NaN. This used to leave NaNs in the HPIPM workspace, and every later solve then failed after one iteration. The controller replayed its last torque open loop until reset, and that caused every remaining <code>extreme</code> fall in the benchmark. The workspace and solution memory are now rebuilt after any failed solve and the solve is retried once.
+      </div>
+      <p>The Python class <code>PyWholeBodyController</code> is the reference implementation. It solves the same problem with OSQP (sparse ADMM, warm-started, \(\varepsilon = 10^{-5}\)) in about 2 ms per tick. The two backends agree to about 0.03 N·m in torque.</p>
+    </section>
+
+    <section id="tick">
+      <h2>One control tick</h2>
+      <div class="flow">
+        <div><b>1</b><span>Run the rigid-body kinematics on \(q, \dot q\). Read attitude \(\theta, \psi\), yaw and the heading frame; compute hub and axle Jacobians and \(v_{\text{fwd}}\).</span></div>
+        <div><b>2</b><span>Limit the turn command by lateral acceleration.</span></div>
+        <div><b>3</b><span>Place each wheel's contact point (disk on flat ground); build the rolling rows \(J_k, b_k\).</span></div>
+        <div><b>4</b><span>Update the momentum observer: wheel loads \(\hat F_n\), contact state, disturbance \(\hat\tau_d\).</span></div>
+        <div><b>5</b><span>Compute the airborne-wheel torques.</span></div>
+        <div><b>6</b><span>Balance layer: lean \(\varphi, \dot\varphi\), references, lean learning, LQR, giving \(a_{ax}\).</span></div>
+        <div><b>7</b><span>Heading hold and bank reference.</span></div>
+        <div><b>8</b><span>Safe-fall check. If latched, output the protective torques and stop here.</span></div>
+        <div><b>9</b><span>Assemble the cost, constraints and posture targets; solve the QP (retrying once on failure).</span></div>
+        <div><b>10</b><span>Recover \(\tau\), add friction feed-forward, subtract \(\hat\tau_d\), clamp.</span></div>
+      </div>
+    </section>
+
+    <section id="params">
+      <h2>Parameters</h2>
+      <p>All are class attributes of <code>PyWholeBodyController</code>, passed to C++ through the <code>WbcParams</code> struct in <code>src/wbc/wbc_params.h</code>.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Group</th><th>Name</th><th>Value</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>Balance</td><td class="mono">lqr_Q, lqr_R</td><td class="num">(30, 40, 100, 2), 1</td><td>LQR weights on \([s, v, \varphi, \dot\varphi]\), input</td></tr>
+          <tr><td></td><td class="mono">a_max</td><td class="num">4.0 m/s²</td><td>axle acceleration clamp</td></tr>
+          <tr><td></td><td class="mono">s_err_max</td><td class="num">0.25 m</td><td>position error clamp</td></tr>
+          <tr><td></td><td class="mono">a_ff_max</td><td class="num">1.5 m/s²</td><td>feed-forward clamp</td></tr>
+          <tr><td></td><td class="mono">ki_lean, lean_off_max</td><td class="num">1.0 s⁻¹, 0.06 rad</td><td>lean-offset learning</td></tr>
+          <tr><td>Steering</td><td class="mono">kp_heading, heading_err_max</td><td class="num">4.0 s⁻¹, 0.5 rad</td><td>heading hold</td></tr>
+          <tr><td></td><td class="mono">a_lat_max</td><td class="num">2.5 m/s²</td><td>turn limit</td></tr>
+          <tr><td></td><td class="mono">bank_gain, max_bank</td><td class="num">0.25, 0.30 rad</td><td>lean into turns</td></tr>
+          <tr><td>Task gains</td><td class="mono">kp/kd_pitch, kp/kd_roll</td><td class="num">150 / 20</td><td>base attitude</td></tr>
+          <tr><td></td><td class="mono">kp_yaw</td><td class="num">100</td><td>yaw-rate tracking</td></tr>
+          <tr><td></td><td class="mono">kp_h, kd_h</td><td class="num">200, 25</td><td>height</td></tr>
+          <tr><td></td><td class="mono">kp_lat, kd_lat</td><td class="num">120, 22</td><td>lateral CoM</td></tr>
+          <tr><td></td><td class="mono">kp_post, kd_post</td><td class="num">60, 12</td><td>leg posture</td></tr>
+          <tr><td>Weights</td><td class="mono">w_contact</td><td class="num">10⁴</td><td>rolling contact</td></tr>
+          <tr><td></td><td class="mono">w_axle, w_yaw</td><td class="num">200, 100</td><td></td></tr>
+          <tr><td></td><td class="mono">w_pitch, w_roll, w_height, w_lat</td><td class="num">50 each</td><td></td></tr>
+          <tr><td></td><td class="mono">w_post, w_post_roll</td><td class="num">1, 1</td><td></td></tr>
+          <tr><td></td><td class="mono">w_tau, w_qdd, w_force, w_ftan</td><td class="num">10⁻³, 10⁻⁵, 10⁻⁵, 10⁻²</td><td>regularisation</td></tr>
+          <tr><td>Contact</td><td class="mono">kv_slip</td><td class="num">20 s⁻¹</td><td>slip damping</td></tr>
+          <tr><td></td><td class="mono">mu, Fz_max</td><td class="num">0.85, 60 N</td><td>friction pyramid, load bound</td></tr>
+          <tr><td></td><td class="mono">obs_K</td><td class="num">40 s⁻¹</td><td>observer bandwidth</td></tr>
+          <tr><td></td><td class="mono">fz_on, fz_off, contact_hold</td><td class="num">3 N, 1 N, 0.04 s</td><td>contact hysteresis</td></tr>
+          <tr><td></td><td class="mono">kd_wheel_air</td><td class="num">0.02</td><td>airborne wheel speed matching</td></tr>
+          <tr><td></td><td class="mono">lim_T, lim_margin</td><td class="num">0.06 s, 0.05 rad</td><td>joint-limit look-ahead</td></tr>
+          <tr><td>Disturbance</td><td class="mono">dist_T, dist_max</td><td class="num">0.3 s, 0.5 N·m</td><td>wheel disturbance filter</td></tr>
+          <tr><td>Safe fall</td><td class="mono">fall_lean, fall_roll, fall_tilt</td><td class="num">0.52, 0.26, 0.6 rad</td><td>trigger limits</td></tr>
+          <tr><td></td><td class="mono">fall_T, fall_qp_T</td><td class="num">0.02 s, 0.05 s</td><td>persistence</td></tr>
+          <tr><td></td><td class="mono">fall_kp, fall_kd</td><td class="num">5, 0.2</td><td>leg tuck PD</td></tr>
+          <tr><td></td><td class="mono">fall_kd_wheel, fall_tau_wheel</td><td class="num">0.05, 1.5 N·m</td><td>wheel brake</td></tr>
+          <tr><td></td><td class="mono">fall_recover_T</td><td class="num">1.0 s</td><td>upright time to resume (0 latches)</td></tr>
+          <tr><td>Solver</td><td class="mono">qp_warm_start</td><td class="num">2</td><td>0 cold, 1 primal, 2 primal + dual</td></tr>
+          <tr><td></td><td class="mono">qp_iter_max, qp_mu0</td><td class="num">40, 100</td><td>iteration cap, initial barrier (cold starts)</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="validation">
+      <h2>Validation</h2>
+      <p><code>tests/wbc_benchmark.py</code> drives the controller through 19 scenarios (standing, pushes, driving, spins, turns, slalom, crouching, a ledge drop, the wavy runway), plus three expected-fall scenarios and one known-failing command beyond the robot's limits. A run counts as a fall when the base tilts past 60° or any body other than a wheel touches the world. <code>bazel test //:wbc_regression_test</code> runs it on the C++ backend.</p>
+      <h3>Robustness mode</h3>
+      <p>Each trial draws one random world while the controller keeps the nominal model:</p>
+      <ul>
+        <li><strong>Model:</strong> link masses ±15%, base CoM shift ±1 cm, ground friction 0.4–1.0, joint friction ×0.5–2, joint damping 0–0.02 N·m·s/rad.</li>
+        <li><strong>Sensing:</strong> 0–4 ms latency, IMU tilt bias ±1°, attitude, gyro, joint and velocity noise, base position noise.</li>
+        <li><strong>Actuators:</strong> torque–speed droop up to 50%, 0–5 ms torque lag, 0–5% cogging ripple, ±10% torque-constant error.</li>
+      </ul>
+      <div class="tbl"><table>
+        <thead><tr><th>Change</th><th>Survival (20 trials × 19 scenarios)</th></tr></thead>
+        <tbody>
+          <tr><td>Before the wheel disturbance observer</td><td class="num">83.1%</td></tr>
+          <tr><td>+ wheel disturbance observer</td><td class="num">88.3%</td></tr>
+          <tr><td>+ heading-invariant roll</td><td class="num">98.4%</td></tr>
+          <tr><td>+ solver workspace recovery (current)</td><td class="num">100.0%</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Safe-fall scenarios</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Scenario</th><th>Impact speed</th><th>Travel after fall</th><th>Wheel speed after fall</th></tr></thead>
+        <tbody>
+          <tr><td>Forward push, 14 N for 0.15 s</td><td class="num">4.8 → 2.3 m/s</td><td class="num">1.41 → 0.36 m</td><td class="num">541 → 0 rad/s</td></tr>
+          <tr><td>Backward push, 12 N for 0.15 s</td><td class="num">2.8 → 2.2 m/s</td><td class="num">1.86 → 0.86 m</td><td class="num">392 → 1.6 rad/s</td></tr>
+          <tr><td>Trip while driving at 1 m/s</td><td class="num">2.7 → 1.7 m/s</td><td class="num">≈ 0.9 m both</td><td class="num">68 → 0 rad/s</td></tr>
+        </tbody>
+      </table></div>
+      <p class="where">Values are without → with safe fall, on the C++ backend. Wheel speed with safe fall is measured from 0.5 s after the trigger.</p>
+    </section>
+
+    <section id="limits">
+      <h2>Limitations</h2>
+      <ul>
+        <li>The lateral CoM task drops the \(\dot J_{\text{com}}\dot q\) term, and \(\dot M\dot q\) in the observer is a finite difference.</li>
+        <li>The pendulum model and its LQR gain are computed once at the home pose. Crouching changes \(l\) by up to 8 cm without a gain update.</li>
+        <li>The occasional NaN solve is now harmless, but its cause is not yet known. The cost spans about nine orders of magnitude in weight, which makes poor conditioning a likely suspect.</li>
+        <li>Commands above about 2 m/s, or 2 m/s combined with a hard turn, exceed what the robot can do. Nothing caps them before the controller, so the robot falls and safe fall catches it.</li>
+        <li>Contact assumes flat ground with a vertical normal. On slopes and the wavy runway, the real normal tilts and the friction pyramid and rolling rows are slightly off. The benchmark still passes there.</li>
+        <li>The NMPC path (<code>src/main_mpc.cpp</code>) still uses the old, heading-dependent roll formula.</li>
+      </ul>
+    </section>
+  </main>
+</div>
