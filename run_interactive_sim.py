@@ -67,18 +67,32 @@ def main():
     parser.add_argument("--duration", type=float, default=None, help="Maximum simulation duration in seconds")
     parser.add_argument("--log-pitch", type=str, default=None, help="Path to write base pitch log CSV")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode without GUI window")
-    parser.add_argument("--wavy", action="store_true", help="Load dual-lane offset wavy terrain runway (CAD/wavy_scene.xml)")
+    parser.add_argument("--wavy", action="store_true", help="Load dual-lane offset wavy terrain runway (<cad>/wavy_scene.xml)")
     parser.add_argument("--speed", type=float, default=None, help="Target forward cruising speed in m/s")
     parser.add_argument("--controller", type=str, choices=["wbc", "nmpc"], default="wbc", help="Active controller: 'wbc' (Hierarchical Whole-Body QP) or 'nmpc' (acados SQP-RTI NMPC)")
+    parser.add_argument("--cad", type=str, default="CAD", help="Robot model directory: CAD (original robot, default) or CAD_bd (BD droid)")
     args, unknown = parser.parse_known_args()
 
     if args.repeat_flips > 1:
         args.auto_flip = True
 
+    here = os.path.dirname(os.path.abspath(__file__))
+    cad_dir = args.cad if os.path.isabs(args.cad) else os.path.join(here, args.cad)
+    if not os.path.isdir(cad_dir):
+        cad_dir = args.cad
+    # The backflip, the cascaded fallback balancer and the acados NMPC are
+    # hand-tuned for the original robot (CAD/): 1.9 kg, 15 N m leg motors, no
+    # neck. Any other model runs on the whole-body controller only, which builds
+    # its model from the MuJoCo XML.
+    orig_robot = os.path.basename(os.path.normpath(cad_dir)) == "CAD"
+    if not orig_robot:
+        if args.controller != "wbc":
+            parser.error(f"--controller {args.controller} is only tuned for CAD/; use the WBC with {args.cad}")
+        if args.auto_flip:
+            parser.error(f"backflips are only tuned for CAD/, not {args.cad}")
+
     scene_file = "wavy_scene.xml" if args.wavy else "scene.xml"
-    model_xml = os.path.join(os.path.dirname(__file__), "CAD", scene_file)
-    if not os.path.isfile(model_xml):
-        model_xml = os.path.join("CAD", scene_file)
+    model_xml = os.path.join(cad_dir, scene_file)
 
     print(f"[Init] Loading MuJoCo model from: {model_xml}")
     m = mujoco.MjModel.from_xml_path(model_xml)
@@ -105,26 +119,41 @@ def main():
         z_start = 0.1172
         x_home = 0.07 if is_multi_flip else 0.0
 
-    # Spawn resting on ground/platform
-    d.qpos[0] = x_start
-    d.qpos[1] = y_home
-    d.qpos[2] = z_start
-    d.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+    # Joint layout shared by every model: legs at qpos[7:15] / ctrl[0:8]
+    # (right roll, pitch, knee, wheel; then left), extra joints (the BD neck)
+    # after them, held at their home pose by the WBC.
+    leg_joints = ("right_hip_roll", "right_hip_pitch", "right_knee", "right_wheel",
+                  "left_hip_roll", "left_hip_pitch", "left_knee", "left_wheel")
+    if [m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j)] for j in leg_joints] != list(range(7, 15)):
+        raise SystemExit(f"{model_xml}: leg joints must be qpos[7:15] in the order {leg_joints}")
+    wheel_R_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel")
+    wheel_L_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel_2")
+    home_qpos = np.array(m.key_qpos[0]) if m.nkey else np.zeros(m.nq)
 
-    d.qpos[7] = 0.0         # right_hip_roll
-    d.qpos[8] = qh_R_nom    # right_hip_pitch
-    d.qpos[9] = qk_R_nom    # right_knee
-    d.qpos[10] = 0.0        # right_wheel
-    d.qpos[11] = 0.0        # left_hip_roll
-    d.qpos[12] = qh_L_nom   # left_hip_pitch
-    d.qpos[13] = qk_L_nom   # left_knee
-    d.qpos[14] = 0.0        # left_wheel
-    d.qvel[:] = 0.0
+    def spawn():
+        """Resting on ground/platform in the nominal stance, zero velocity."""
+        d.qpos[:] = home_qpos
+        d.qpos[0] = x_start
+        d.qpos[1] = y_home
+        d.qpos[2] = z_start
+        d.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
 
-    mujoco.mj_forward(m, d)
+        d.qpos[7] = 0.0         # right_hip_roll
+        d.qpos[8] = qh_R_nom    # right_hip_pitch
+        d.qpos[9] = qk_R_nom    # right_knee
+        d.qpos[10] = 0.0        # right_wheel
+        d.qpos[11] = 0.0        # left_hip_roll
+        d.qpos[12] = qh_L_nom   # left_hip_pitch
+        d.qpos[13] = qk_L_nom   # left_knee
+        d.qpos[14] = 0.0        # left_wheel
+        d.qvel[:] = 0.0
+        mujoco.mj_forward(m, d)
+
+    spawn()
 
     print("\n" + "=" * 75)
     print("      Acrobat / BDX Wheeled Biped: 8-DOF Drive, Lean & Active Suspension")
+    print(f"      Robot: {model_xml} ({m.nu} actuators, {float(np.sum(m.body_mass)):.2f} kg)")
     print("=" * 75)
     print("  Driving & Cornering Controls:")
     print("    - DRIVE FORWARD:    Press 'W' or Up Arrow     (+0.2 m/s per tap)")
@@ -136,8 +165,9 @@ def main():
     print("    - CROUCH DOWN:      Press 'C'                 (Tap repeatedly to crouch lower, up to -5cm)")
     print("    - STAND TALL:       Press 'T'                 (Tap repeatedly to stand taller)")
     print("    - NOMINAL HEIGHT:   Press 'N'                 (Reset to nominal stance)")
-    print("  Acrobatic Stunt:")
-    print(f"    - 360 BACKFLIP:     Press 'B'                 (Explosive jump, tucked flip & landing) [Repeat: {args.repeat_flips}]")
+    if orig_robot:
+        print("  Acrobatic Stunt:")
+        print(f"    - 360 BACKFLIP:     Press 'B'                 (Explosive jump, tucked flip & landing) [Repeat: {args.repeat_flips}]")
     if args.wavy:
         print("  Terrain Mode:")
         print("    - WAVY RUNWAY:      Dual offset wave lanes active (180° out-of-phase)!")
@@ -182,10 +212,12 @@ def main():
             print(f"[Controller] LQR-assisted Whole-Body QP active ({qp_name}, 20 vars: qdd + contact forces, "
                   "friction cones, joint limits, heading hold, 500 Hz)")
         except Exception as e:
+            if not orig_robot:
+                raise SystemExit(f"[Error] WholeBodyController failed on {model_xml}: {e}")
             print(f"[Warning] Could not initialize WholeBodyController ({e}). Falling back to NMPC.")
             wbc_solver = None
 
-    mpc_lib, mpc_handle, mpc_so_path = load_acados_mpc()
+    mpc_lib, mpc_handle, mpc_so_path = load_acados_mpc() if orig_robot else (None, None, None)
     if args.controller == "nmpc" or wbc_solver is None:
         if mpc_lib is not None:
             print(f"[Controller] acados SQP-RTI Nonlinear MPC Active ({os.path.basename(mpc_so_path)}, 8 states, 3 controls, ~3.8 kHz)")
@@ -330,7 +362,10 @@ def main():
             qk_target = 0.0
             print_status("Nominal Height")
         elif keycode in (ord('B'), ord('b')):
-            trigger_flip()
+            if orig_robot:
+                trigger_flip()
+            else:
+                print("[STUNT] Backflips are only tuned for the original robot (CAD/).")
 
     log_fp = None
     if args.log_pitch:
@@ -367,20 +402,7 @@ def main():
 
                 # Handle Reset (Backspace key in viewer)
                 if not args.headless and d.time < last_sim_time:
-                    d.qpos[0] = x_start
-                    d.qpos[1] = y_home
-                    d.qpos[2] = z_start
-                    d.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
-                    d.qpos[7] = 0.0
-                    d.qpos[8] = qh_R_nom
-                    d.qpos[9] = qk_R_nom
-                    d.qpos[10] = 0.0
-                    d.qpos[11] = 0.0
-                    d.qpos[12] = qh_L_nom
-                    d.qpos[13] = qk_L_nom
-                    d.qpos[14] = 0.0
-                    d.qvel[:] = 0.0
-                    mujoco.mj_forward(m, d)
+                    spawn()
                     step_count = 0
                     v_target = 0.0
                     yaw_rate_target = 0.0
@@ -476,7 +498,7 @@ def main():
                         for c in range(d.ncon):
                             b1 = m.geom_bodyid[d.contact[c].geom1]
                             b2 = m.geom_bodyid[d.contact[c].geom2]
-                            if b1 not in (5, 9) and b2 not in (5, 9):
+                            if b1 not in (wheel_R_id, wheel_L_id) and b2 not in (wheel_R_id, wheel_L_id):
                                 current_flip_air_collisions += 1
 
                     # Milestone logging
@@ -871,8 +893,8 @@ def main():
                 step_count += 1
 
                 if args.wavy and step_count % 250 == 0:
-                    r_wheel_z = d.xpos[5][2]
-                    l_wheel_z = d.xpos[9][2]
+                    r_wheel_z = d.xpos[wheel_R_id][2]
+                    l_wheel_z = d.xpos[wheel_L_id][2]
                     h_diff = l_wheel_z - r_wheel_z
                     roll_deg = np.degrees(np.arctan2(-R[2, 0], R[2, 2]))
                     ctrl_stat = f" | WBC={wbc_info['solve_time_us']:.0f}µs" if wbc_solver is not None else (f" | MPC={mpc_solve_time.value:.0f}µs" if mpc_lib is not None else "")
