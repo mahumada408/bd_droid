@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate CAD_bd/robot.xml: MuJoCo model of the BD-style droid (CAD/bd_droid_rs05.fs).
+"""Generate CAD_bd/robot.xml: MuJoCo model of the BD-style droid (CAD/bd_droid_rs05.fs, slim inboard-knee layout).
 
 The geometry, joint axes and mass layout come from the same numbers as the Onshape
 FeatureScript. Inertias are built from primitive mass elements (motors, battery,
@@ -33,7 +33,11 @@ R = 50.0            # wheel radius
 LK = 105.0          # thigh = shin length
 RZ = HZ + 45        # hip roll axis height
 TZ0 = HZ + 18       # torso bottom
-TZ1 = TZ0 + 197     # torso top (lid underside)
+TZ1 = HZ + 159      # torso top (lid underside)
+TYF = 88.0          # torso front face (rear face -70)
+TYC = (TYF - 70.0) / 2   # torso fore-aft centre
+WC = 195.0          # wheel (tyre) centre, |x|
+KNEE_D = 49.343     # knee-motor axis distance from the hip, along the thigh
 LT = TZ1 + 4        # lid top
 NY = -6.0           # neck axis y
 PZ = LT + 41 + 46.5 - 11.25          # neck pitch axis
@@ -51,6 +55,15 @@ KNEE_RANGE = (-1.15, 0.40)
 
 RS05_MASS = 0.191
 XL430_MASS = 0.0572
+BATTERY_MASS = 0.71  # Makita XGT BL4025 40V max 2.5 Ah (36 V nominal), 118 x 77 x 65 mm
+
+# Knee: the RS05 sits inboard of the thigh, beside the hip-pitch motor, and drives the knee through an
+# 18T:36T Gates 5MGT-25 belt, 5MR-250-25 (CAD/bd_droid_rs05.fs).
+KNEE_RATIO = 36.0 / 18.0
+RS05_PEAK = 5.5                                  # N m at the motor output
+RS05_ARMATURE = 0.005                            # reflected rotor inertia at the RS05 output (kg m^2)
+KNEE_PEAK = RS05_PEAK * KNEE_RATIO               # 11 N m at the knee joint
+KNEE_ARMATURE = RS05_ARMATURE * KNEE_RATIO ** 2  # 0.02 kg m^2
 
 
 # ---------------------------------------------------------------- inertia helpers
@@ -109,6 +122,12 @@ def leg_points(e):
     return (hy + wy) / 2 + h * ny, (hz + wz) / 2 + h * nz
 
 
+def knee_motor(ky, kz):
+    """Knee-motor axis (y, z): on the thigh axis, KNEE_D from the hip."""
+    L = math.hypot(ky, kz - HZ)
+    return KNEE_D * ky / L, HZ + KNEE_D * (kz - HZ) / L
+
+
 def link_R(y1, z1, y2, z2):
     """Rotation taking the +z axis onto the (y,z) segment direction."""
     return rot_x(math.atan2(-(y2 - y1), z2 - z1))
@@ -119,17 +138,20 @@ def build_bodies(e):
     ky, kz = leg_points(e)
     B = {}
 
+    zb = HZ + 79                                # battery underside (slides in from the back onto the rail dock)
     b = Body()                                  # body_base
-    b.box(0.30, (0, 0, TZ0 + 98.5), (120, 140, 197), scale=1.6)        # torso shell (hollow -> scaled)
-    b.box(0.04, (0, 0, TZ1 + 2), (120, 140, 4))                        # lid
-    b.box(0.06, (0, 72, TZ0 + 99), (116, 6, 194))                      # door + chest details
-    b.box(0.05, (0, 21, TZ0 + 10), (111, 85, 20))                      # battery cradle
-    b.box(0.88, (0, 23.5, TZ0 + 6 + 83), (103, 81, 166))               # SuperHandy 48 V 2 Ah
-    b.box(0.04, (0, 22, TZ0 + 182), (60, 65, 20))                      # terminal adapter
-    b.box(0.10, (0, -50, TZ0 + 52 + 66), (70, 25, 133))                # Nucleo + CAN + buck
+    b.box(0.29, (0, TYC, (TZ0 + TZ1) / 2), (120, 158, TZ1 - TZ0), scale=1.6)   # torso shell (hollow -> scaled)
+    b.box(0.045, (0, TYC, TZ1 + 2), (120, 158, 4))                     # lid
+    b.box(0.02, (0, TYF + 2, HZ + 100), (52, 4, 54))                   # chest details
+    b.box(0.06, (0, -6, zb - 2), (110, 121, 4))                        # battery shelf
+    b.box(BATTERY_MASS, (0, -11, zb + 32.5), (77, 118, 65))            # Makita XGT 40V pack
+    b.box(0.11, (0, -11, zb + 65 + 7.5), (90, 112, 15))                # XGT rail dock + carrier
+    b.box(0.05, (0, TYF - 22, TZ0 + 72), (70, 18, 133))                # NUCLEO-H743ZI, vertical on the front wall
+    b.box(0.07, (-37, 15, TZ0 + 15), (36, 70, 20))                     # power / CAN carrier (DC-DC x2, transceiver)
+    b.box(0.04, (-4, -4, TZ0 + 12), (12, 28, 12))                      # fuse, battery leads
     for s in (1, -1):
         b.cyl(RS05_MASS, (s * 26, -45, RZ), 23, 44, "y")               # hip-roll motors
-    b.box(0.10, (0, 0, TZ0 + 100), (100, 120, 150))                    # wiring, fasteners, inserts
+    b.box(0.12, (0, TYC, TZ0 + 70), (110, 150, 130))                   # wiring, fasteners, inserts
     b.box(0.03, (0, NY + 6, LT + 17), (36, 55, 35), scale=1.6)         # neck collar
     b.box(XL430_MASS, (0, NY + 12, LT + 18), (28.5, 46.5, 34))         # yaw XL430 (stator)
     B["body_base"] = b
@@ -141,25 +163,28 @@ def build_bodies(e):
         h.cyl(RS05_MASS, (s * 89, 0, HZ), 23, 44, "x")                 # hip-pitch motor
         B["hip_" + side] = h
 
+        my, mz = knee_motor(ky, kz)
         f = Body()                                                     # femur*
         Rl = link_R(0, HZ, ky, kz)
-        f.box(0.10, (s * 123, ky / 2, (HZ + kz) / 2), (18, 50, LK), R=Rl)   # thigh + cover
-        f.cyl(RS05_MASS, (s * 154, 0, HZ), 23, 44, "x")                # knee motor (rides on thigh)
-        f.cyl(0.015, (s * 179, 0, HZ), 26, 6, "x")                     # shoulder cap
-        f.point(0.03, (s * 125, ky * 0.5, (HZ + kz) / 2))              # pulleys, belt, bearings
+        f.box(0.15, (s * 135, ky * 0.55, HZ + (kz - HZ) * 0.55), (42, 68, LK + 60), R=Rl, scale=1.3)  # thigh + cover (hollow)
+        f.cyl(RS05_MASS, (s * 92, my, mz), 23, 44, "x")                # knee motor, inboard beside the hip-pitch motor
+        f.cyl(0.06, (s * 136, my, mz), 17, 36, "x")                    # 18T pulley, shaft adapter, 6800 + carrier
+        f.box(0.025, (s * 135.5, (my + ky) / 2, (mz + kz) / 2), (25, 40, LK - KNEE_D), R=Rl)   # 5MR-250-25 belt
+        f.point(0.012, (s * 130, ky, kz))                              # 688 + 6706 knee bearings
         B["femur_" + side] = f
 
-        t = Body()                                                     # tibia*
+        t = Body()                                                     # tibia* (outboard of the thigh cover)
         Rs = link_R(ky, kz, e, R)
-        t.box(0.045, (s * 108, (ky + e) / 2, (kz + R) / 2), (8, 40, LK), R=Rs)
-        t.cyl(0.15, (s * 134, e, R), 23, 44, "x")                      # wheel-motor stator
-        t.cyl(0.02, (s * 115, ky, kz), 9, 20, "x")                     # knee shaft + driven pulley
+        t.box(0.045, (s * 162, (ky + e) / 2, (kz + R) / 2), (8, 40, LK), R=Rs)
+        t.cyl(0.15, (s * 188, e, R), 23, 44, "x")                      # wheel-motor stator
+        t.cyl(0.05, (s * 140, ky, kz), 28, 36, "x")                    # knee hub: 36T pulley + D30 boss
+        t.cyl(0.01, (s * 167.5, ky, kz), 20, 3, "x")                   # knee cap
         B["tibia_" + side] = t
 
         w = Body()                                                     # wheel*
-        w.cyl(0.09, (s * 151, e, R), 50, 36, "x", r_in=35)             # TPU tyre
-        w.cyl(0.05, (s * 151, e, R), 35, 36, "x", r_in=31)             # hub + rim
-        w.cyl(0.04, (s * 150, e, R), 15, 10, "x")                      # motor rotor + output
+        w.cyl(0.09, (s * WC, e, R), 50, 36, "x", r_in=35)              # TPU tyre
+        w.cyl(0.06, (s * (WC + 2), e, R), 35, 36, "x", r_in=31)        # hub + rim
+        w.cyl(0.04, (s * 204, e, R), 15, 10, "x")                      # motor rotor + output
         B["wheel_" + side] = w
 
     y = Body()                                                         # neck_yaw
@@ -270,14 +295,18 @@ def main():
     w('      <camera name="track_robot" mode="trackcom" pos="0 -1.6 0.6" xyaxes="1 0 0 0 0.35 0.94"/>')
     w('      ' + inertial(B["body_base"], base_o))
     o = base_o
-    # torso visuals
-    w('      ' + geom_box("visual", (0, 0, TZ0 + 98.5), (60, 70, 98.5), o, "white"))
-    w('      ' + geom_box("visual", (0, 0, TZ1 + 2), (60, 70, 2), o, "white"))
-    w('      ' + geom_box("visual", (0, 71.5, TZ0 + 99), (58, 1.5, 97), o, "white"))
-    w('      ' + geom_box("visual", (0, 75, TZ0 + 95), (26, 2, 27), o, "dark"))
-    w('      ' + geom_box("visual", (0, 74, TZ0 + 162), (12, 1, 32), o, "orange"))
+    # torso visuals: narrow box, lid, chest details on the front wall, battery end in the rear opening
+    cz = HZ + 100
+    zb = HZ + 79
+    w('      ' + geom_box("visual", (0, TYC, (TZ0 + TZ1) / 2), (60, 79, (TZ1 - TZ0) / 2), o, "white"))
+    w('      ' + geom_box("visual", (0, TYC, TZ1 + 2), (60, 79, 2), o, "white"))
+    w('      ' + geom_box("visual", (0, TYF + 2, cz), (26, 2, 27), o, "dark"))
+    w('      ' + geom_box("visual", (0, TYF + 1, (cz + 33 + TZ1 - 5) / 2), (12, 1, (TZ1 - 5 - cz - 33) / 2), o, "orange"))
+    for s in (1, -1):
+        w('      ' + geom_box("visual", (s * 42, TYF + 1, cz), (4, 1, 27), o, "orange"))
+    w('      ' + geom_box("visual", (0, -70.5, zb + 26.5), (38.5, 1, 26.5), o, "battery"))
     w('      ' + geom_box("visual", (0, NY + 6, LT + 17.5), (18, 27.5, 17.5), o, "orange"))
-    w('      ' + geom_box("collision", (0, 0, TZ0 + 98.5), (60, 70, 98.5), o))
+    w('      ' + geom_box("collision", (0, TYC, (TZ0 + TZ1) / 2), (60, 79, (TZ1 - TZ0) / 2), o))
     w('      ' + geom_box("collision", (0, NY + 6, LT + 17.5), (18, 27.5, 17.5), o))
     w('      <site name="imu" pos="0 0 0" size="0.005"/>')
 
@@ -299,34 +328,35 @@ def main():
         w(f'        <body name="{names["femur"]}" pos="{f(*(of - oh))}" quat="{f(*axq("x", q[1]))}">')
         w(f'          <joint name="{jn}_hip_pitch" axis="1 0 0" range="{q[1] + HIP_RANGE[0]:.6f} {q[1] + HIP_RANGE[1]:.6f}"/>')
         w('          ' + inertial(B["femur_" + side], of))
-        w('          ' + link_geom("visual", s * 123, 0, HZ, ky, kz, 26, 9, of, "white"))
-        w('          ' + geom_cyl("visual", (s * 114, 0, HZ), (s * 132, 0, HZ), 32, of, "white"))
-        w('          ' + geom_cyl("visual", (s * 114, ky, kz), (s * 132, ky, kz), 24, of, "white"))
-        w('          ' + link_geom("visual", s * 133, 0, HZ, ky, kz, 6, 1, of, "orange"))
-        w('          ' + geom_cyl("visual", (s * 132, 0, HZ), (s * 176, 0, HZ), 23, of, "motor"))
-        w('          ' + geom_cyl("visual", (s * 176, 0, HZ), (s * 182, 0, HZ), 26, of, "orange"))
-        w('          ' + geom_cyl("visual", (s * 132, ky, kz), (s * 141, ky, kz), 18, of, "orange"))
-        w('          ' + geom_cyl("collision", (s * 123, 0, HZ), (s * 123, ky, kz), 24, of, kind="capsule"))
-        w('          ' + geom_cyl("collision", (s * 132, 0, HZ), (s * 182, 0, HZ), 26, of))
+        my, mz = knee_motor(ky, kz)
+        w('          ' + link_geom("visual", s * 135, 0, HZ, ky, kz, 30, 21, of, "white"))
+        w('          ' + geom_cyl("visual", (s * 114, 0, HZ), (s * 156, 0, HZ), 30, of, "white"))
+        w('          ' + geom_cyl("visual", (s * 114, ky, kz), (s * 156, ky, kz), 38, of, "white"))
+        w('          ' + geom_cyl("visual", (s * 156, my, mz), (s * 156.5, my, mz), 14, of, "grey"))
+        w('          ' + geom_cyl("visual", (s * 70, my, mz), (s * 114, my, mz), 23, of, "motor"))
+        w('          ' + geom_cyl("collision", (s * 135, 0, HZ), (s * 135, ky, kz), 30, of, kind="capsule"))
+        w('          ' + geom_cyl("collision", (s * 70, my, mz), (s * 114, my, mz), 23, of))
         ot = P(s * 108, ky, kz)
         w(f'          <body name="{names["tibia"]}" pos="{f(*(ot - of))}" quat="{f(*axq("x", q[2]))}">')
-        w(f'            <joint name="{jn}_knee" axis="1 0 0" range="{q[2] + KNEE_RANGE[0]:.6f} {q[2] + KNEE_RANGE[1]:.6f}"/>')
+        w(f'            <joint name="{jn}_knee" axis="1 0 0" range="{q[2] + KNEE_RANGE[0]:.6f} {q[2] + KNEE_RANGE[1]:.6f}" '
+          f'armature="{KNEE_ARMATURE:.6g}" frictionloss="0.15"/>')   # belt reduction: reflected inertia x ratio^2
         w('            ' + inertial(B["tibia_" + side], ot))
-        w('            ' + link_geom("visual", s * 108, ky, kz, e, R, 22, 4, ot, "white"))
-        w('            ' + geom_cyl("visual", (s * 104, ky, kz), (s * 112, ky, kz), 22, ot, "white"))
-        w('            ' + geom_cyl("visual", (s * 104, e, R), (s * 112, e, R), 28, ot, "white"))
-        w('            ' + geom_cyl("visual", (s * 112, e, R), (s * 156, e, R), 23, ot, "motor"))
+        w('            ' + link_geom("visual", s * 162, ky, kz, e, R, 22, 4, ot, "white"))
+        w('            ' + geom_cyl("visual", (s * 158, ky, kz), (s * 166, ky, kz), 22, ot, "white"))
+        w('            ' + geom_cyl("visual", (s * 158, e, R), (s * 166, e, R), 28, ot, "white"))
+        w('            ' + geom_cyl("visual", (s * 166, ky, kz), (s * 169, ky, kz), 20, ot, "orange"))
+        w('            ' + geom_cyl("visual", (s * 166, e, R), (s * 210, e, R), 23, ot, "motor"))
         # shin collision stops 40 mm above the axle; the wheel motor sits inside the wheel silhouette
         sy, sz = e + (ky - e) * 40 / LK, R + (kz - R) * 40 / LK
-        w('            ' + geom_cyl("collision", (s * 108, ky, kz), (s * 108, sy, sz), 18, ot, kind="capsule"))
-        ow = P(s * 151, e, R)
+        w('            ' + geom_cyl("collision", (s * 162, ky, kz), (s * 162, sy, sz), 18, ot, kind="capsule"))
+        ow = P(s * WC, e, R)
         w(f'            <body name="{names["wheel"]}" pos="{f(*(ow - ot))}">')
         w(f'              <joint name="{jn}_wheel" axis="1 0 0"/>')
         w('              ' + inertial(B["wheel_" + side], ow))
-        w('              ' + geom_cyl("visual", (s * 133, e, R), (s * 169, e, R), 50, ow, "tyre"))
-        w('              ' + geom_cyl("visual", (s * 159, e, R), (s * 167, e, R), 34, ow, "grey"))
-        w('              ' + geom_cyl("visual", (s * 166, e, R), (s * 170, e, R), 13, ow, "orange"))
-        w('              ' + geom_cyl("collision", (s * 133, e, R), (s * 169, e, R), 50, ow))
+        w('              ' + geom_cyl("visual", (s * (WC - 18), e, R), (s * (WC + 18), e, R), 50, ow, "tyre"))
+        w('              ' + geom_cyl("visual", (s * 213, e, R), (s * 217, e, R), 34, ow, "grey"))
+        w('              ' + geom_cyl("visual", (s * 217, e, R), (s * 221, e, R), 13, ow, "orange"))
+        w('              ' + geom_cyl("collision", (s * (WC - 18), e, R), (s * (WC + 18), e, R), 50, ow))
         w('            </body>')
         w('          </body>')
         w('        </body>')
@@ -374,7 +404,9 @@ def main():
     w('  <actuator>')
     for jn in ("right", "left"):
         for j in ("hip_roll", "hip_pitch", "knee", "wheel"):
-            w(f'    <motor name="{jn}_{j}" joint="{jn}_{j}" gear="1" ctrlrange="-5.5 5.5"/>')   # RS05 peak 5.5 N m
+            # RS05 peak 5.5 N m; the knee sees it through the 1.6:1 belt (joint torque, gear 1)
+            lim = KNEE_PEAK if j == "knee" else RS05_PEAK
+            w(f'    <motor name="{jn}_{j}" joint="{jn}_{j}" gear="1" ctrlrange="{-lim:.4g} {lim:.4g}"/>')
     for j in ("neck_yaw", "neck_pitch", "neck_roll"):
         w(f'    <motor name="{j}" joint="{j}" gear="1" ctrlrange="-1.4 1.4"/>')                  # XL430 stall 1.4 N m @ 11.1 V
     w('  </actuator>')

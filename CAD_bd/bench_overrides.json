@@ -1,22 +1,65 @@
 {
   "extreme": {
-    "limits": {"roll_max": 8.0},
-    "why": "CoM 0.21 m above the axle (0.135 m on CAD/) and 4.4 kg: more roll in hard turns. Measured 5.2 deg nominal; limit 1.5x like the CAD/ limits"
+    "limits": {
+      "roll_max": 8.0
+    },
+    "why": "CoM 0.19 m above the axle (0.135 m on CAD/) and 4.6 kg: more roll in hard turns. Measured 5.2 deg nominal; limit 1.5x like the CAD/ limits"
   },
   "slalom": {
-    "limits": {"roll_max": 3.9},
+    "limits": {
+      "roll_max": 3.9
+    },
     "why": "taller, heavier robot as for extreme. Measured 2.6 deg nominal; limit 1.5x"
   },
   "fall_fwd": {
-    "push": [1.0, 1.15, [0, 50.0, 0, 0, 0, 0]],
-    "why": "14 N does not topple a 4.4 kg robot (it recovers up to ~40 N). 50 N is clearly unrecoverable, as the scenario intends"
+    "push": [
+      1.0,
+      1.15,
+      [
+        0,
+        52.0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "why": "14 N does not topple this robot; scaled with mass (50 N at 4.4 kg) to the 4.6 kg XGT-battery robot. Clearly unrecoverable, as the scenario intends"
   },
   "fall_back": {
-    "push": [1.0, 1.15, [0, -35.0, 0, 0, 0, 0]],
-    "why": "-12 N does not topple a 4.4 kg robot; -35 N falls promptly"
+    "push": [
+      1.0,
+      1.15,
+      [
+        0,
+        -37.0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "why": "-12 N does not topple this robot; -35 N at 4.4 kg scaled with mass to 4.6 kg"
   },
   "fall_trip": {
-    "push": [2.0, 2.3, [0, 0, 0, 7.0, 0, 0]],
-    "why": "3 N m does not trip a 4.4 kg robot; scaled with mass (2.3x)"
+    "push": [
+      2.0,
+      2.3,
+      [
+        0,
+        0,
+        0,
+        7.4,
+        0,
+        0
+      ]
+    ],
+    "why": "3 N m does not trip this robot; 7 N m at 4.4 kg scaled with mass to 4.6 kg"
+  },
+  "fast_turn": {
+    "limits": {
+      "roll_max": 4.5
+    },
+    "why": "taller robot as for extreme (CoM 0.19 m above the axle). Measured 3.0-3.1 deg nominal at 6 kg; limit 1.5x"
   }
 }

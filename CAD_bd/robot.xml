@@ -25,15 +25,17 @@
     <body name="body_base" pos="0 0 0.0372" childclass="CAD">
       <freejoint name="root"/>
       <camera name="track_robot" mode="trackcom" pos="0 -1.6 0.6" xyaxes="1 0 0 0 0.35 0.94"/>
-      <inertial pos="0 0.002492742252 0.2794282856" mass="2.0392" fullinertia="0.01180097932 0.01034011073 0.005410038043 0 0 -0.001009375499"/>
-      <geom class="visual" type="box" pos="0 0 0.2893" size="0.06 0.07 0.0985" material="white"/>
-      <geom class="visual" type="box" pos="0 0 0.3898" size="0.06 0.07 0.002" material="white"/>
-      <geom class="visual" type="box" pos="0 0.0715 0.2898" size="0.058 0.0015 0.097" material="white"/>
-      <geom class="visual" type="box" pos="0 0.075 0.2858" size="0.026 0.002 0.027" material="dark"/>
-      <geom class="visual" type="box" pos="0 0.074 0.3528" size="0.012 0.001 0.032" material="orange"/>
-      <geom class="visual" type="box" pos="0 0 0.4093" size="0.018 0.0275 0.0175" material="orange"/>
-      <geom class="collision" type="box" pos="0 0 0.2893" size="0.06 0.07 0.0985"/>
-      <geom class="collision" type="box" pos="0 0 0.4093" size="0.018 0.0275 0.0175"/>
+      <inertial pos="-0.001385948997 -0.008135167826 0.266980627" mass="1.9842" fullinertia="0.007734802836 0.005804335862 0.005252023705 6.058171152e-05 -0.0001687267241 -0.0006250440441"/>
+      <geom class="visual" type="box" pos="0 0.009 0.2613" size="0.06 0.079 0.0705" material="white"/>
+      <geom class="visual" type="box" pos="0 0.009 0.3338" size="0.06 0.079 0.002" material="white"/>
+      <geom class="visual" type="box" pos="0 0.09 0.2728" size="0.026 0.002 0.027" material="dark"/>
+      <geom class="visual" type="box" pos="0 0.089 0.3163" size="0.012 0.001 0.0105" material="orange"/>
+      <geom class="visual" type="box" pos="0.042 0.089 0.2728" size="0.004 0.001 0.027" material="orange"/>
+      <geom class="visual" type="box" pos="-0.042 0.089 0.2728" size="0.004 0.001 0.027" material="orange"/>
+      <geom class="visual" type="box" pos="0 -0.0705 0.2783" size="0.0385 0.001 0.0265" material="battery"/>
+      <geom class="visual" type="box" pos="0 0 0.3533" size="0.018 0.0275 0.0175" material="orange"/>
+      <geom class="collision" type="box" pos="0 0.009 0.2613" size="0.06 0.079 0.0705"/>
+      <geom class="collision" type="box" pos="0 0 0.3533" size="0.018 0.0275 0.0175"/>
       <site name="imu" pos="0 0 0" size="0.005"/>
       <body name="hip_roll_right" pos="0.026 -0.07 0.2178" quat="1 0 0 0">
         <joint name="right_hip_roll" axis="0 1 0" range="-0.6 0.6"/>
@@ -46,30 +48,29 @@
         <geom class="collision" type="cylinder" fromto="0.041 0.07 -0.045 0.085 0.07 -0.045" size="0.023"/>
         <body name="femur" pos="0.094 0.07 -0.045" quat="0.98766144 -0.1566042141 0 0">
           <joint name="right_hip_pitch" axis="1 0 0" range="-0.135497 1.064503"/>
-          <inertial pos="0.02330059524 0.01348348935 -0.01519187847" mass="0.336" fullinertia="0.0003879775208 0.0003370480807 0.0003025300532 8.987990278e-05 -0.0001012678932 0.0001443324388"/>
-          <geom class="visual" type="box" pos="0.003 0.034849634 -0.0392651628" quat="0.3550296727 -0.9348550323 0 0" size="0.009 0.026 0.0525" material="white"/>
-          <geom class="visual" type="cylinder" fromto="-0.006 0 0 0.012 0 0" size="0.032" material="white"/>
-          <geom class="visual" type="cylinder" fromto="-0.006 0.069699268 -0.07853032561 0.012 0.069699268 -0.07853032561" size="0.024" material="white"/>
-          <geom class="visual" type="box" pos="0.013 0.034849634 -0.0392651628" quat="0.3550296727 -0.9348550323 0 0" size="0.001 0.006 0.0525" material="orange"/>
-          <geom class="visual" type="cylinder" fromto="0.012 0 0 0.056 0 0" size="0.023" material="motor"/>
-          <geom class="visual" type="cylinder" fromto="0.056 0 0 0.062 0 0" size="0.026" material="orange"/>
-          <geom class="visual" type="cylinder" fromto="0.012 0.069699268 -0.07853032561 0.021 0.069699268 -0.07853032561" size="0.018" material="orange"/>
-          <geom class="collision" type="capsule" fromto="0.003 0 0 0.003 0.069699268 -0.07853032561" size="0.024"/>
-          <geom class="collision" type="cylinder" fromto="0.012 0 0 0.062 0 0" size="0.026"/>
-          <body name="tibia" pos="-0.012 0.069699268 -0.07853032561" quat="0.9996499679 0.0264564127 0 0">
-            <joint name="right_knee" axis="1 0 0" range="-1.202919 0.347081"/>
-            <inertial pos="0.01879069767 -0.05314577129 -0.06536520387" mass="0.215" fullinertia="0.0003397371802 0.0002507472786 0.0001921343977 4.362574617e-05 5.365630648e-05 -0.0001406043609"/>
-            <geom class="visual" type="box" pos="0 -0.03311982848 -0.0407348372" quat="0.3347374637 0.9423114296 0 0" size="0.004 0.022 0.0525" material="white"/>
-            <geom class="visual" type="cylinder" fromto="-0.004 0 0 0.004 0 0" size="0.022" material="white"/>
-            <geom class="visual" type="cylinder" fromto="-0.004 -0.06623965696 -0.08146967439 0.004 -0.06623965696 -0.08146967439" size="0.028" material="white"/>
-            <geom class="visual" type="cylinder" fromto="0.004 -0.06623965696 -0.08146967439 0.048 -0.06623965696 -0.08146967439" size="0.023" material="motor"/>
-            <geom class="collision" type="capsule" fromto="0 0 0 0 -0.04100550193 -0.05043360796" size="0.018"/>
-            <body name="wheel" pos="0.043 -0.06623965696 -0.08146967439">
+          <inertial pos="-0.00372260274 0.03718868423 -0.04097562711" mass="0.438" fullinertia="0.0006379295472 0.0006066044679 0.0005658296718 -3.101467274e-05 3.417291284e-05 0.0002099089516"/>
+          <geom class="visual" type="box" pos="0.015 0.03528316253 -0.03887606515" quat="0.3602107167 -0.9328709662 0 0" size="0.021 0.03 0.0525" material="white"/>
+          <geom class="visual" type="cylinder" fromto="-0.006 0 0 0.036 0 0" size="0.03" material="white"/>
+          <geom class="visual" type="cylinder" fromto="-0.006 0.07056632506 -0.07775213031 0.036 0.07056632506 -0.07775213031" size="0.038" material="white"/>
+          <geom class="visual" type="cylinder" fromto="0.036 0.03316146836 -0.03653831777 0.0365 0.03316146836 -0.03653831777" size="0.014" material="grey"/>
+          <geom class="visual" type="cylinder" fromto="-0.05 0.03316146836 -0.03653831777 -0.006 0.03316146836 -0.03653831777" size="0.023" material="motor"/>
+          <geom class="collision" type="capsule" fromto="0.015 0 0 0.015 0.07056632506 -0.07775213031" size="0.03"/>
+          <geom class="collision" type="cylinder" fromto="-0.05 0.03316146836 -0.03653831777 -0.006 0.03316146836 -0.03653831777" size="0.023"/>
+          <body name="tibia" pos="-0.012 0.07056632506 -0.07775213031" quat="0.9996499679 0.0264564127 0 0">
+            <joint name="right_knee" axis="1 0 0" range="-1.202919 0.347081" armature="0.02" frictionloss="0.15"/>
+            <inertial pos="0.06519607843 -0.04415383139 -0.05563826479" mass="0.255" fullinertia="0.0005998797794 0.0004835365017 0.0003639136699 0.000128497248 0.0001619194458 -0.0002564190768"/>
+            <geom class="visual" type="box" pos="0.054 -0.03263544059 -0.04112393485" quat="0.3291557043 0.9442756602 0 0" size="0.004 0.022 0.0525" material="white"/>
+            <geom class="visual" type="cylinder" fromto="0.05 0 0 0.058 0 0" size="0.022" material="white"/>
+            <geom class="visual" type="cylinder" fromto="0.05 -0.06527088119 -0.08224786969 0.058 -0.06527088119 -0.08224786969" size="0.028" material="white"/>
+            <geom class="visual" type="cylinder" fromto="0.058 0 0 0.061 0 0" size="0.02" material="orange"/>
+            <geom class="visual" type="cylinder" fromto="0.058 -0.06527088119 -0.08224786969 0.102 -0.06527088119 -0.08224786969" size="0.023" material="motor"/>
+            <geom class="collision" type="capsule" fromto="0.054 0 0 0.054 -0.04040578359 -0.05091534791" size="0.018"/>
+            <body name="wheel" pos="0.087 -0.06527088119 -0.08224786969">
               <joint name="right_wheel" axis="1 0 0"/>
-              <inertial pos="-0.0002222222222 -4.33680869e-19 0" mass="0.18" fullinertia="0.000226775 0.0001288719444 0.0001288719444 -3.129753709e-36 0 0"/>
+              <inertial pos="0.002526315789 0 -6.938893904e-18" mass="0.19" fullinertia="0.000237705 0.0001376532018 0.0001376532018 0 -6.018531076e-36 0"/>
               <geom class="visual" type="cylinder" fromto="-0.018 0 0 0.018 0 0" size="0.05" material="tyre"/>
-              <geom class="visual" type="cylinder" fromto="0.008 0 0 0.016 0 0" size="0.034" material="grey"/>
-              <geom class="visual" type="cylinder" fromto="0.015 0 0 0.019 0 0" size="0.013" material="orange"/>
+              <geom class="visual" type="cylinder" fromto="0.018 0 0 0.022 0 0" size="0.034" material="grey"/>
+              <geom class="visual" type="cylinder" fromto="0.022 0 0 0.026 0 0" size="0.013" material="orange"/>
               <geom class="collision" type="cylinder" fromto="-0.018 0 0 0.018 0 0" size="0.05"/>
             </body>
           </body>
@@ -86,36 +87,35 @@
         <geom class="collision" type="cylinder" fromto="-0.041 0.07 -0.045 -0.085 0.07 -0.045" size="0.023"/>
         <body name="femur_2" pos="-0.094 0.07 -0.045" quat="0.9943580723 0.1060755585 0 0">
           <joint name="left_hip_pitch" axis="1 0 0" range="-0.662551 0.537449"/>
-          <inertial pos="-0.02330059524 0.01348348935 -0.01519187847" mass="0.336" fullinertia="0.0003879775208 0.0003370480807 0.0003025300532 -8.987990278e-05 0.0001012678932 0.0001443324388"/>
-          <geom class="visual" type="box" pos="-0.003 0.034849634 -0.0392651628" quat="0.3550296727 -0.9348550323 0 0" size="0.009 0.026 0.0525" material="white"/>
-          <geom class="visual" type="cylinder" fromto="0.006 0 0 -0.012 0 0" size="0.032" material="white"/>
-          <geom class="visual" type="cylinder" fromto="0.006 0.069699268 -0.07853032561 -0.012 0.069699268 -0.07853032561" size="0.024" material="white"/>
-          <geom class="visual" type="box" pos="-0.013 0.034849634 -0.0392651628" quat="0.3550296727 -0.9348550323 0 0" size="0.001 0.006 0.0525" material="orange"/>
-          <geom class="visual" type="cylinder" fromto="-0.012 0 0 -0.056 0 0" size="0.023" material="motor"/>
-          <geom class="visual" type="cylinder" fromto="-0.056 0 0 -0.062 0 0" size="0.026" material="orange"/>
-          <geom class="visual" type="cylinder" fromto="-0.012 0.069699268 -0.07853032561 -0.021 0.069699268 -0.07853032561" size="0.018" material="orange"/>
-          <geom class="collision" type="capsule" fromto="-0.003 0 0 -0.003 0.069699268 -0.07853032561" size="0.024"/>
-          <geom class="collision" type="cylinder" fromto="-0.012 0 0 -0.062 0 0" size="0.026"/>
-          <body name="tibia_2" pos="0.012 0.069699268 -0.07853032561" quat="0.9919919296 -0.1263012732 0 0">
-            <joint name="left_knee" axis="1 0 0" range="-0.896721 0.653279"/>
-            <inertial pos="-0.01879069767 -0.05314577129 -0.06536520387" mass="0.215" fullinertia="0.0003397371802 0.0002507472786 0.0001921343977 -4.362574617e-05 -5.365630648e-05 -0.0001406043609"/>
-            <geom class="visual" type="box" pos="0 -0.03311982848 -0.0407348372" quat="0.3347374637 0.9423114296 0 0" size="0.004 0.022 0.0525" material="white"/>
-            <geom class="visual" type="cylinder" fromto="0.004 0 0 -0.004 0 0" size="0.022" material="white"/>
-            <geom class="visual" type="cylinder" fromto="0.004 -0.06623965696 -0.08146967439 -0.004 -0.06623965696 -0.08146967439" size="0.028" material="white"/>
-            <geom class="visual" type="cylinder" fromto="-0.004 -0.06623965696 -0.08146967439 -0.048 -0.06623965696 -0.08146967439" size="0.023" material="motor"/>
-            <geom class="collision" type="capsule" fromto="0 0 0 0 -0.04100550193 -0.05043360796" size="0.018"/>
-            <body name="wheel_2" pos="-0.043 -0.06623965696 -0.08146967439">
+          <inertial pos="0.00372260274 0.03718868423 -0.04097562711" mass="0.438" fullinertia="0.0006379295472 0.0006066044679 0.0005658296718 3.101467274e-05 -3.417291284e-05 0.0002099089516"/>
+          <geom class="visual" type="box" pos="-0.015 0.03528316253 -0.03887606515" quat="0.3602107167 -0.9328709662 0 0" size="0.021 0.03 0.0525" material="white"/>
+          <geom class="visual" type="cylinder" fromto="0.006 0 0 -0.036 0 0" size="0.03" material="white"/>
+          <geom class="visual" type="cylinder" fromto="0.006 0.07056632506 -0.07775213031 -0.036 0.07056632506 -0.07775213031" size="0.038" material="white"/>
+          <geom class="visual" type="cylinder" fromto="-0.036 0.03316146836 -0.03653831777 -0.0365 0.03316146836 -0.03653831777" size="0.014" material="grey"/>
+          <geom class="visual" type="cylinder" fromto="0.05 0.03316146836 -0.03653831777 0.006 0.03316146836 -0.03653831777" size="0.023" material="motor"/>
+          <geom class="collision" type="capsule" fromto="-0.015 0 0 -0.015 0.07056632506 -0.07775213031" size="0.03"/>
+          <geom class="collision" type="cylinder" fromto="0.05 0.03316146836 -0.03653831777 0.006 0.03316146836 -0.03653831777" size="0.023"/>
+          <body name="tibia_2" pos="0.012 0.07056632506 -0.07775213031" quat="0.9919919296 -0.1263012732 0 0">
+            <joint name="left_knee" axis="1 0 0" range="-0.896721 0.653279" armature="0.02" frictionloss="0.15"/>
+            <inertial pos="-0.06519607843 -0.04415383139 -0.05563826479" mass="0.255" fullinertia="0.0005998797794 0.0004835365017 0.0003639136699 -0.000128497248 -0.0001619194458 -0.0002564190768"/>
+            <geom class="visual" type="box" pos="-0.054 -0.03263544059 -0.04112393485" quat="0.3291557043 0.9442756602 0 0" size="0.004 0.022 0.0525" material="white"/>
+            <geom class="visual" type="cylinder" fromto="-0.05 0 0 -0.058 0 0" size="0.022" material="white"/>
+            <geom class="visual" type="cylinder" fromto="-0.05 -0.06527088119 -0.08224786969 -0.058 -0.06527088119 -0.08224786969" size="0.028" material="white"/>
+            <geom class="visual" type="cylinder" fromto="-0.058 0 0 -0.061 0 0" size="0.02" material="orange"/>
+            <geom class="visual" type="cylinder" fromto="-0.058 -0.06527088119 -0.08224786969 -0.102 -0.06527088119 -0.08224786969" size="0.023" material="motor"/>
+            <geom class="collision" type="capsule" fromto="-0.054 0 0 -0.054 -0.04040578359 -0.05091534791" size="0.018"/>
+            <body name="wheel_2" pos="-0.087 -0.06527088119 -0.08224786969">
               <joint name="left_wheel" axis="1 0 0"/>
-              <inertial pos="0.0002222222222 -4.33680869e-19 0" mass="0.18" fullinertia="0.000226775 0.0001288719444 0.0001288719444 3.129753709e-36 0 0"/>
+              <inertial pos="-0.002526315789 0 -6.938893904e-18" mass="0.19" fullinertia="0.000237705 0.0001376532018 0.0001376532018 0 6.018531076e-36 0"/>
               <geom class="visual" type="cylinder" fromto="0.018 0 0 -0.018 0 0" size="0.05" material="tyre"/>
-              <geom class="visual" type="cylinder" fromto="-0.008 0 0 -0.016 0 0" size="0.034" material="grey"/>
-              <geom class="visual" type="cylinder" fromto="-0.015 0 0 -0.019 0 0" size="0.013" material="orange"/>
+              <geom class="visual" type="cylinder" fromto="-0.018 0 0 -0.022 0 0" size="0.034" material="grey"/>
+              <geom class="visual" type="cylinder" fromto="-0.022 0 0 -0.026 0 0" size="0.013" material="orange"/>
               <geom class="collision" type="cylinder" fromto="0.018 0 0 -0.018 0 0" size="0.05"/>
             </body>
           </body>
         </body>
       </body>
-      <body name="neck_yaw" pos="0 -0.006 0.4298">
+      <body name="neck_yaw" pos="0 -0.006 0.3738">
         <joint name="neck_yaw" class="neck" axis="0 0 1" range="-1.5 1.5"/>
         <inertial pos="0 0 0.02256696429" mass="0.0672" fullinertia="2.030252366e-05 2.194106533e-05 1.118699167e-05 0 0 0"/>
         <geom class="visual" type="cylinder" fromto="0 0 0 0 0 0.003" size="0.019" material="white"/>
@@ -123,7 +123,7 @@
         <geom class="collision" type="box" pos="0 0 0.02625" size="0.017 0.01425 0.02325"/>
         <body name="neck_pitch" pos="0 0 0.03825">
           <joint name="neck_pitch" class="neck" axis="1 0 0" range="-0.5 0.5"/>
-          <inertial pos="0 8.67361738e-19 0.03789507772" mass="0.0772" fullinertia="3.403598346e-05 3.46174418e-05 1.4215325e-05 0 0 6.441709043e-36"/>
+          <inertial pos="0 8.67361738e-19 0.03789507772" mass="0.0772" fullinertia="3.403598346e-05 3.46174418e-05 1.4215325e-05 0 0 2.68012712e-36"/>
           <geom class="visual" type="box" pos="0.0215 0 0.0115" size="0.0015 0.012 0.0115" material="white"/>
           <geom class="visual" type="box" pos="-0.0215 0 0.0115" size="0.0015 0.012 0.0115" material="white"/>
           <geom class="visual" type="box" pos="0 0 0.0215" size="0.023 0.014 0.0015" material="white"/>
@@ -154,11 +154,11 @@
   <actuator>
     <motor name="right_hip_roll" joint="right_hip_roll" gear="1" ctrlrange="-5.5 5.5"/>
     <motor name="right_hip_pitch" joint="right_hip_pitch" gear="1" ctrlrange="-5.5 5.5"/>
-    <motor name="right_knee" joint="right_knee" gear="1" ctrlrange="-5.5 5.5"/>
+    <motor name="right_knee" joint="right_knee" gear="1" ctrlrange="-11 11"/>
     <motor name="right_wheel" joint="right_wheel" gear="1" ctrlrange="-5.5 5.5"/>
     <motor name="left_hip_roll" joint="left_hip_roll" gear="1" ctrlrange="-5.5 5.5"/>
     <motor name="left_hip_pitch" joint="left_hip_pitch" gear="1" ctrlrange="-5.5 5.5"/>
-    <motor name="left_knee" joint="left_knee" gear="1" ctrlrange="-5.5 5.5"/>
+    <motor name="left_knee" joint="left_knee" gear="1" ctrlrange="-11 11"/>
     <motor name="left_wheel" joint="left_wheel" gear="1" ctrlrange="-5.5 5.5"/>
     <motor name="neck_yaw" joint="neck_yaw" gear="1" ctrlrange="-1.4 1.4"/>
     <motor name="neck_pitch" joint="neck_pitch" gear="1" ctrlrange="-1.4 1.4"/>
