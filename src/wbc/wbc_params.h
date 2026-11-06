@@ -54,6 +54,8 @@ typedef struct WbcParams {
   double contact_from_load, obs_K, fz_on, fz_off, contact_geom_dist;
   double ki_lean, lean_off_max, lean_learn_vmax;
   double dist_comp, dist_T, dist_max;
+  double fall_detect, fall_lean, fall_roll, fall_tilt, fall_T, fall_qp_T;
+  double fall_kp, fall_kd, fall_kd_wheel, fall_tau_wheel, fall_recover_T;
 } WbcParams;
 
 // Layout of the info vector filled by wbc_step()
@@ -73,6 +75,7 @@ enum {
   WBC_INFO_PHI_OFF,          // learned lean offset, rad
   WBC_INFO_DIST_R,           // estimated unmodeled wheel torque, Nm
   WBC_INFO_DIST_L,
+  WBC_INFO_SAFE_FALL,        // 0 balancing, else latched safe-fall cause (1 lean, 2 roll, 3 tilt, 4 QP)
   WBC_INFO_FC,               // 6 values
   WBC_INFO_QDD = WBC_INFO_FC + 6,   // nv values
 };

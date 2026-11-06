@@ -80,15 +80,28 @@ struct HpipmQp {
     d_dense_qp_ipm_arg_set_tol_comp(&tol, &arg);
     d_dense_qp_ipm_arg_set_mu0(&mu0, &arg);
     d_dense_qp_ipm_arg_set_warm_start(&warm, &arg);
-    hpipm_size_t s_ws = d_dense_qp_ipm_ws_memsize(&dim, &arg);
-    void* m_ws = std::calloc(1, s_ws);
-    d_dense_qp_ipm_ws_create(&dim, &arg, &ws, m_ws);
-    blocks_ = {m_dim, m_qp, m_sol, m_arg, m_ws};
+    s_ws_ = d_dense_qp_ipm_ws_memsize(&dim, &arg);
+    s_sol_ = s_sol;
+    m_ws_ = std::calloc(1, s_ws_);
+    m_sol_ = m_sol;
+    d_dense_qp_ipm_ws_create(&dim, &arg, &ws, m_ws_);
+    blocks_ = {m_dim, m_qp, m_sol, m_arg, m_ws_};
+  }
+  // A NaN solve can leave NaNs in the workspace / solution that poison every
+  // later solve (HPIPM then fails after one iteration forever). Rebuild both.
+  void reset_ws() {
+    std::memset(m_ws_, 0, s_ws_);
+    d_dense_qp_ipm_ws_create(&dim, &arg, &ws, m_ws_);
+    std::memset(m_sol_, 0, s_sol_);
+    d_dense_qp_sol_create(&dim, &sol, m_sol_);
   }
   ~HpipmQp() {
     for (void* p : blocks_) std::free(p);
   }
   std::vector<void*> blocks_;
+  void* m_ws_ = nullptr;
+  void* m_sol_ = nullptr;
+  hpipm_size_t s_ws_ = 0, s_sol_ = 0;
 };
 
 }  // namespace
@@ -114,6 +127,10 @@ struct WbcHandle {
   double phi_off = 0;        // learned lean offset (IMU bias / CoM error)
   // wheel-joint disturbance observer (same momentum observer, wheel rows)
   double pw_int[2] = {0, 0}, tau_dist[2] = {0, 0};
+  int n_fail = 0;            // consecutive failed QP solves
+  // safe fall: latched once a fall is judged unrecoverable
+  int fall_mode = 0;
+  double t_fall_cond = 0, t_upright = 0;
 
   // work buffers
   std::vector<double> M, jp, jpd, Jhub[2], Jc, Jk, Jcom, Jw, JT, P, q, Atau, btau;
@@ -192,6 +209,9 @@ struct WbcHandle {
     phi_off = 0;
     pw_int[0] = pw_int[1] = 0;
     tau_dist[0] = tau_dist[1] = 0;
+    n_fail = 0;
+    fall_mode = 0;
+    t_fall_cond = t_upright = 0;
     std::fill(last_tau.begin(), last_tau.end(), 0.0);
   }
 
@@ -512,6 +532,67 @@ struct WbcHandle {
     const double h_rel = d->qpos[2] - axle[2];
     const double hd_rel = qv[2] - v_ax[2];
 
+    // ---- Safe fall. A fall is judged unrecoverable when the lean error (CoM
+    // over the axle, relative to what the balance layer is commanding), the
+    // roll error or the base tilt stays past its limit for fall_T, or the QP
+    // keeps failing. The
+    // controller then latches: wheels brake (no runaway on the ground), legs
+    // tuck to the lowest posture with soft joint PD (lower, compliant impact),
+    // no QP. It resumes only after the robot is upright and still again.
+    auto fill_info = [&](double* inf, double status_code, int iters_, bool ok_) {
+      inf[WBC_INFO_STATUS] = status_code;
+      inf[WBC_INFO_SOLVE_US] =
+          std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+      inf[WBC_INFO_PHI] = phi;
+      inf[WBC_INFO_PSI_REF] = psi_ref;
+      inf[WBC_INFO_A_AXLE] = a_axle;
+      inf[WBC_INFO_PITCH] = theta;
+      inf[WBC_INFO_ROLL] = roll;
+      inf[WBC_INFO_CONTACTS] = n_on;
+      inf[WBC_INFO_HEADING_ERR] = e_head;
+      inf[WBC_INFO_QP_ITER] = iters_;
+      inf[WBC_INFO_FN_R] = Fn_est[0];
+      inf[WBC_INFO_FN_L] = Fn_est[1];
+      inf[WBC_INFO_PHI_OFF] = phi_off;
+      inf[WBC_INFO_DIST_R] = tau_dist[0];
+      inf[WBC_INFO_DIST_L] = tau_dist[1];
+      inf[WBC_INFO_SAFE_FALL] = fall_mode;
+      for (int k = 0; k < NC; ++k) inf[WBC_INFO_FC + k] = ok_ ? x[nv + k] : 0.0;
+      for (int j = 0; j < nv; ++j) inf[WBC_INFO_QDD + j] = ok_ ? x[j] : 0.0;
+    };
+    if (p.fall_detect != 0 && !fall_mode) {
+      const double lean_err = phi - phi_off - std::atan(a_ff / G);
+      int cause = 0;
+      if (std::fabs(lean_err) > p.fall_lean) cause = 1;
+      else if (std::fabs(roll - psi_ref) > p.fall_roll) cause = 2;
+      else if (R[8] < std::cos(p.fall_tilt)) cause = 3;          // base tilt from vertical
+      t_fall_cond = cause ? t_fall_cond + dt : 0.0;
+      if (cause && t_fall_cond >= p.fall_T) fall_mode = cause;
+      if (n_fail * dt >= p.fall_qp_T) fall_mode = 4;
+      t_upright = 0.0;
+    }
+    if (fall_mode) {
+      for (int k = 0; k < n_leg; ++k) {
+        const int a = p.leg_idx[k];
+        const double e = p.q_grid[a] - d->qpos[p.act_qpos[a]];       // lowest posture row
+        last_tau[a] = clampd(p.fall_kp * e - p.fall_kd * qv[p.act_dof[a]], p.tau_min[a], p.tau_max[a]);
+      }
+      for (int w = 0; w < 2; ++w) {
+        const int a = p.wheel_act[w];
+        const double lim = std::min(p.fall_tau_wheel, std::min(-p.tau_min[a], p.tau_max[a]));
+        last_tau[a] = clampd(-p.fall_kd_wheel * qv[p.act_dof[a]], -lim, lim);
+      }
+      std::copy(last_tau.begin(), last_tau.end(), tau_out);
+      std::fill(x.begin(), x.end(), 0.0);
+      if (info) fill_info(info, 0, 0, false);
+      // Upright, both wheels loaded and nearly still for fall_recover_T: resume.
+      const bool upright = std::fabs(theta) < 0.15 && std::fabs(roll) < 0.15 && std::fabs(phi) < 0.15 &&
+                           n_on == 2 && std::fabs(wx) < 0.5 && std::fabs(wy) < 0.5;
+      t_upright = upright ? t_upright + dt : 0.0;
+      if (p.fall_recover_T > 0 && t_upright >= p.fall_recover_T) reset();
+      return 0;
+    }
+
     double bT[NTASK] = {0}, wT[NTASK] = {0};
     std::fill(JT.begin(), JT.end(), 0.0);
     for (int w = 0; w < 2; ++w) {
@@ -673,13 +754,19 @@ struct WbcHandle {
     d_dense_qp_set_C(C_cm.data(), &Q.qp);
     d_dense_qp_set_lg(lg.data(), &Q.qp);
     d_dense_qp_set_ug(ug.data(), &Q.qp);
-    d_dense_qp_ipm_solve(&Q.qp, &Q.sol, &Q.arg, &Q.ws);
     int status = 0, iters = 0;
-    d_dense_qp_ipm_get_status(&Q.ws, &status);
-    d_dense_qp_ipm_get_iter(&Q.ws, &iters);
-    d_dense_qp_sol_get_v(&Q.sol, x.data());
-    bool ok = status <= 2;   // SUCCESS, MAX_ITER, MIN_STEP (NAN_SOL = 3)
-    for (int i = 0; ok && i < nx; ++i) ok = std::isfinite(x[i]);
+    bool ok = false;
+    for (int attempt = 0; attempt < 2 && !ok; ++attempt) {
+      if (attempt) Q.reset_ws();
+      d_dense_qp_ipm_solve(&Q.qp, &Q.sol, &Q.arg, &Q.ws);
+      d_dense_qp_ipm_get_status(&Q.ws, &status);
+      d_dense_qp_ipm_get_iter(&Q.ws, &iters);
+      d_dense_qp_sol_get_v(&Q.sol, x.data());
+      ok = status <= 2;   // SUCCESS, MAX_ITER, MIN_STEP (NAN_SOL = 3)
+      for (int i = 0; ok && i < nx; ++i) ok = std::isfinite(x[i]);
+    }
+    if (!ok) Q.reset_ws();   // never carry a poisoned workspace into the next tick
+    n_fail = ok ? 0 : n_fail + 1;
 
     if (ok) {
       for (int a = 0; a < nu; ++a) {
@@ -695,26 +782,7 @@ struct WbcHandle {
     }
     std::copy(last_tau.begin(), last_tau.end(), tau_out);
 
-    if (info) {
-      const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
-      info[WBC_INFO_STATUS] = ok ? status : -1 - status;
-      info[WBC_INFO_SOLVE_US] = us;
-      info[WBC_INFO_PHI] = phi;
-      info[WBC_INFO_PSI_REF] = psi_ref;
-      info[WBC_INFO_A_AXLE] = a_axle;
-      info[WBC_INFO_PITCH] = theta;
-      info[WBC_INFO_ROLL] = roll;
-      info[WBC_INFO_CONTACTS] = n_on;
-      info[WBC_INFO_HEADING_ERR] = e_head;
-      info[WBC_INFO_QP_ITER] = iters;
-      info[WBC_INFO_FN_R] = Fn_est[0];
-      info[WBC_INFO_FN_L] = Fn_est[1];
-      info[WBC_INFO_PHI_OFF] = phi_off;
-      info[WBC_INFO_DIST_R] = tau_dist[0];
-      info[WBC_INFO_DIST_L] = tau_dist[1];
-      for (int k = 0; k < NC; ++k) info[WBC_INFO_FC + k] = ok ? x[nv + k] : 0.0;
-      for (int j = 0; j < nv; ++j) info[WBC_INFO_QDD + j] = ok ? x[j] : 0.0;
-    }
+    if (info) fill_info(info, ok ? status : -1 - status, iters, ok);
     return ok ? 0 : -1;
   }
 };

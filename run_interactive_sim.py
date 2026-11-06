@@ -340,6 +340,7 @@ def main():
     global_unwrapped_pitch = 0.0
     global_last_pitch = None
     wbc_was_active = False
+    safe_fall_shown = 0
 
     try:
         if args.headless:
@@ -394,6 +395,7 @@ def main():
                     settle_timer = 0.0
                     if wbc_solver is not None:
                         wbc_solver.reset()
+                    safe_fall_shown = 0
                     print("\n[Reset] Robot reset to platform surface (z = 0.08m, zero velocity).")
 
                 last_sim_time = d.time
@@ -787,6 +789,7 @@ def main():
                             # takes over from another mode (start, backflip, multi-flip settling).
                             if not wbc_was_active:
                                 wbc_solver.reset()
+                                safe_fall_shown = 0
                             wbc_ran_this_tick = True
 
                             tau_wbc, wbc_info = wbc_solver.step(
@@ -798,6 +801,15 @@ def main():
                                 dt=dt_sim
                             )
                             d.ctrl[:] = tau_wbc
+                            sf = wbc_info.get("safe_fall", 0)
+                            if sf != safe_fall_shown:
+                                if sf:
+                                    cause = {1: "lean", 2: "roll", 3: "tilt", 4: "QP failure"}.get(sf, sf)
+                                    print(f"\n[SAFE FALL] t={d.time:.2f}s fall detected ({cause}): wheels braking, "
+                                          f"legs tucked. Press Backspace to reset.")
+                                else:
+                                    print(f"\n[SAFE FALL] t={d.time:.2f}s upright again, balancing resumed.")
+                                safe_fall_shown = sf
                         else:
                             # Manual keyboard driving mode: active hip banking, differential knees, and hip pitch coordination
                             alpha_q = min(1.0, 3.0 * dt_sim)

@@ -39,6 +39,15 @@ observer on the floating-base rows), not from geometric distance, so attitude
 errors cannot make a loaded wheel look airborne. A slow integrator learns the
 lean offset at standstill (IMU tilt bias, CoM error) so the robot does not creep.
 
+Safe fall: when a fall is unrecoverable (lean error > fall_lean, roll error >
+fall_roll or base tilt > fall_tilt for fall_T, or the QP failing for fall_qp_T)
+the controller latches into a protective mode instead of fighting to the
+ground: wheels brake, legs tuck to the lowest posture under soft joint PD, no
+QP. info["safe_fall"] gives the cause (1 lean, 2 roll, 3 tilt, 4 QP); balancing
+resumes after fall_recover_T upright and still, or on reset(). The C++ solver
+rebuilds its HPIPM workspace after a failed solve (a NaN solve used to poison
+every later solve, so one bad tick meant open-loop torques until reset).
+
 Backends: WholeBodyController runs the per-tick solve in C++ (src/wbc/, Bazel
 target //:libwbc.so, HPIPM dense IPM, ~0.1 ms/tick) and falls back to the
 Python/OSQP reference implementation PyWholeBodyController (~0.8 ms/tick) when
@@ -134,6 +143,20 @@ class PyWholeBodyController:
     dist_comp = True
     dist_T = 0.3          # s, low-pass time constant
     dist_max = 0.5        # Nm, clamp
+    # Safe fall: once a fall is unrecoverable (lean or roll error past its limit
+    # for fall_T, or the QP failing for fall_qp_T) latch into a protective mode:
+    # brake the wheels, tuck the legs to the lowest posture with soft joint PD.
+    fall_detect = True
+    fall_lean = 0.52      # rad, lean error (CoM over axle vs. commanded lean)
+    fall_roll = 0.26      # rad, roll error vs. the bank reference
+    fall_tilt = 0.6       # rad, base tilt from vertical
+    fall_T = 0.02         # s, persistence before triggering
+    fall_qp_T = 0.05      # s, consecutive QP failures before triggering
+    fall_kp = 5.0         # Nm/rad, leg tuck stiffness
+    fall_kd = 0.2         # Nm s/rad
+    fall_kd_wheel = 0.05  # Nm/(rad/s), wheel brake
+    fall_tau_wheel = 1.5  # Nm, wheel brake torque clamp
+    fall_recover_T = 1.0  # s upright and still before balancing resumes (0: stay latched)
 
     def __init__(self, model: mujoco.MjModel, mu: float = 0.85):
         self.m = model
@@ -375,6 +398,10 @@ class PyWholeBodyController:
         self.phi_off = 0.0
         self.pw_int = np.zeros(2)
         self.tau_dist = np.zeros(2)
+        self.n_fail = 0
+        self.fall_mode = 0
+        self.t_fall_cond = 0.0
+        self.t_upright = 0.0
 
     # --------------------------------------------------------------- helpers
     def _point_jac(self, d, point, body):
@@ -584,6 +611,54 @@ class PyWholeBodyController:
         h_rel = d.qpos[2] - axle[2]
         hd_rel = qv[2] - v_ax[2]
 
+        def make_info(status, Fc, qdd):
+            return {
+                "status": status,
+                "solve_time_us": (time.perf_counter() - t0) * 1e6,
+                "th_ref": phi,
+                "psi_ref": psi_ref,
+                "a_axle": a_axle,
+                "Fc": Fc,
+                "pitch_deg": math.degrees(theta),
+                "roll_deg": math.degrees(roll),
+                "lean_deg": math.degrees(phi),
+                "contacts": n_on,
+                "heading_err": e_head,
+                "Fn_est": self.Fn_est.copy(),
+                "phi_off": self.phi_off,
+                "tau_dist": self.tau_dist.copy(),
+                "safe_fall": self.fall_mode,
+                "qdd": qdd,
+            }
+
+        # ---- Safe fall (see the C++ controller for the rationale)
+        if self.fall_detect and not self.fall_mode:
+            lean_err = phi - self.phi_off - math.atan(a_ff / G)
+            cause = (1 if abs(lean_err) > self.fall_lean else
+                     2 if abs(roll - psi_ref) > self.fall_roll else
+                     3 if R[2, 2] < math.cos(self.fall_tilt) else 0)
+            self.t_fall_cond = self.t_fall_cond + dt if cause else 0.0
+            if cause and self.t_fall_cond >= self.fall_T:
+                self.fall_mode = cause
+            if self.n_fail * dt >= self.fall_qp_T:
+                self.fall_mode = 4
+            self.t_upright = 0.0
+        if self.fall_mode:
+            tau = self.last_tau
+            la = self.leg_idx
+            tau[la] = np.clip(self.fall_kp * (self.q_grid[0][la] - d.qpos[self.act_qpos[la]])
+                              - self.fall_kd * qv[self.act_dof[la]], self.tau_min[la], self.tau_max[la])
+            for a in self.wheel_act:
+                lim = min(self.fall_tau_wheel, -self.tau_min[a], self.tau_max[a])
+                tau[a] = min(max(-self.fall_kd_wheel * qv[self.act_dof[a]], -lim), lim)
+            info = make_info("safe_fall", np.zeros(self.nc), np.zeros(nv))
+            upright = (abs(theta) < 0.15 and abs(roll) < 0.15 and abs(phi) < 0.15 and n_on == 2
+                       and abs(wx) < 0.5 and abs(wy) < 0.5)
+            self.t_upright = self.t_upright + dt if upright else 0.0
+            if self.fall_recover_T > 0 and self.t_upright >= self.fall_recover_T:
+                self.reset()
+            return tau.copy(), info
+
         # Stacked tasks: rows of J (qdd), b (desired J qdd), weights
         JT, bT, wT = self._JT, self._bT, self._wT
         JT[:] = 0.0
@@ -680,24 +755,8 @@ class PyWholeBodyController:
             tau = self.last_tau.copy()
             Fc = np.zeros(self.nc)
 
-        info = {
-            "status": status,
-            "solve_time_us": (time.perf_counter() - t0) * 1e6,
-            "th_ref": phi,
-            "psi_ref": psi_ref,
-            "a_axle": a_axle,
-            "Fc": Fc,
-            "pitch_deg": math.degrees(theta),
-            "roll_deg": math.degrees(roll),
-            "lean_deg": math.degrees(phi),
-            "contacts": n_on,
-            "heading_err": e_head,
-            "Fn_est": self.Fn_est.copy(),
-            "phi_off": self.phi_off,
-            "tau_dist": self.tau_dist.copy(),
-            "qdd": x[:nv].copy() if ok else np.zeros(nv),
-        }
-        return tau, info
+        self.n_fail = 0 if ok else self.n_fail + 1
+        return tau, make_info(status, Fc, x[:nv].copy() if ok else np.zeros(nv))
 
 
 # ---------------------------------------------------------------------------
@@ -718,6 +777,8 @@ _GAIN_FIELDS = (
     "contact_from_load", "obs_K", "fz_on", "fz_off", "contact_geom_dist",
     "ki_lean", "lean_off_max", "lean_learn_vmax",
     "dist_comp", "dist_T", "dist_max",
+    "fall_detect", "fall_lean", "fall_roll", "fall_tilt", "fall_T", "fall_qp_T",
+    "fall_kp", "fall_kd", "fall_kd_wheel", "fall_tau_wheel", "fall_recover_T",
 )
 
 
@@ -741,7 +802,7 @@ class _WbcParams(ctypes.Structure):
 
 # info vector layout (enum in wbc_params.h)
 (_I_STATUS, _I_US, _I_PHI, _I_PSI, _I_AAX, _I_PITCH, _I_ROLL, _I_CONT, _I_HEAD, _I_ITER,
- _I_FNR, _I_FNL, _I_PHIOFF, _I_DISTR, _I_DISTL, _I_FC) = range(16)
+ _I_FNR, _I_FNL, _I_PHIOFF, _I_DISTR, _I_DISTL, _I_SAFE, _I_FC) = range(17)
 _I_QDD = _I_FC + 6
 
 _LIB = None
@@ -871,7 +932,7 @@ class WholeBodyController(PyWholeBodyController):
                                 delta_h, roll_target_offset, dt, self._tau_p, self._info_p)
         I, nv = self._info, self.nv
         info = {
-            "status": "solved" if rc == 0 else f"failed ({int(I[_I_STATUS])})",
+            "status": ("safe_fall" if I[_I_SAFE] else "solved") if rc == 0 else f"failed ({int(I[_I_STATUS])})",
             "solve_time_us": I[_I_US],
             "th_ref": I[_I_PHI],
             "psi_ref": I[_I_PSI],
@@ -886,6 +947,7 @@ class WholeBodyController(PyWholeBodyController):
             "Fn_est": I[_I_FNR:_I_FNL + 1].copy(),
             "phi_off": I[_I_PHIOFF],
             "tau_dist": I[_I_DISTR:_I_DISTL + 1].copy(),
+            "safe_fall": int(I[_I_SAFE]),
             "qdd": I[_I_QDD:_I_QDD + nv].copy(),
         }
         return self._tau.copy(), info

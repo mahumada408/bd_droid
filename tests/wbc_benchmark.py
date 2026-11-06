@@ -12,7 +12,11 @@ terrain roll offset), then prints metrics and checks them against limits.
   bazel test //:wbc_regression_test
 
 Exit code is non-zero if any scenario breaks its limits (unless --no-check).
-Scenarios marked `known_fail` are reported but never fail the run.
+Scenarios marked `known_fail` are reported but never fail the run. A run counts
+as a fall when the base tilts past 60 deg or any non-wheel body touches the
+world; a safe-fall trigger in a normal scenario is a failure. `expect_fall`
+scenarios (nominal mode only) instead require the safe fall to trigger before
+impact and bound the impact speed, post-fall travel and wheel speed.
 
 Robustness mode (--robust N): every scenario is run N times against a randomly
 perturbed world while the controller keeps the nominal model:
@@ -76,6 +80,7 @@ class Scenario:
     push: Optional[tuple] = None          # (t0, t1, wrench[6] world frame on the base)
     limits: dict = field(default_factory=dict)
     known_fail: bool = False
+    expect_fall: bool = False             # unrecoverable by design: checks the safe fall instead
 
 
 # Limits sit ~1.5x above the C++ controller's measured values (2026-11).
@@ -116,7 +121,19 @@ SCENARIOS = [
              limits=dict(roll_max=2.0)),
     Scenario("max_cmd", 8.0, v=step_at(0.5, 2.0), yaw=step_at(3.0, 1.8), start=FLOOR,
              known_fail=True),
+    # Safe fall (nominal mode only): pushes past what the balance layer can
+    # recover. The controller must detect the fall before the body hits the
+    # ground, then brake the wheels (no runaway on the ground). fall_wheel_max is
+    # the wheel speed from 0.5 s after the trigger on. Without the safe fall
+    # these hit at 2.7-4.8 m/s with the wheels spinning at 70-540 rad/s.
+    Scenario("fall_fwd", 4.0, push=(1.0, 1.15, [0, 14.0, 0, 0, 0, 0]), start=FLOOR, expect_fall=True,
+             limits=dict(hit_v=3.0, fall_travel=0.6, fall_wheel_max=5.0)),
+    Scenario("fall_back", 4.0, push=(1.0, 1.15, [0, -12.0, 0, 0, 0, 0]), start=FLOOR, expect_fall=True,
+             limits=dict(hit_v=3.0, fall_travel=1.2, fall_wheel_max=5.0)),
+    Scenario("fall_trip", 4.0, v=step_at(0.5, 1.0), push=(2.0, 2.3, [0, 0, 0, 3.0, 0, 0]), start=FLOOR,
+             expect_fall=True, limits=dict(hit_v=2.5, fall_travel=1.3, fall_wheel_max=5.0)),
 ]
+FALL_POST = 2.0     # s simulated after a fall in expect_fall scenarios
 
 
 # --------------------------------------------------------------------------
@@ -279,7 +296,17 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
     log, ts = [], []
     fell = None
     yaw0 = None
-    for _ in range(int(sc.T / dt)):
+    # Robot bodies that must never touch the world (all but the wheels): a
+    # contact means a crash even when the base is not tilted past 60 deg
+    # (e.g. lying wedged on its side on the wavy runway).
+    is_world = m.body_rootid == 0
+    hull = np.array([m.body_rootid[b] != 0 and "wheel" not in m.body(b).name for b in range(m.nbody)])
+    safe_t = hit_t = hit_v = p_safe = None
+    fall_travel = fall_wheel_max = 0.0
+    wheel_dofs = [m.jnt_dofadr[j] for j in range(m.njnt) if "wheel" in m.joint(j).name]
+    vel6 = np.zeros(6)
+    t_end = sc.T
+    while d.time < t_end - 0.5 * dt:
         t = d.time
         R = d.xmat[1].reshape(3, 3)
         theta = math.atan2(R[2, 1], R[2, 2])
@@ -305,16 +332,32 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
         if sc.push and sc.push[0] <= t < sc.push[1]:
             d.xfrc_applied[1] = sc.push[2]
         t0 = time.perf_counter()
-        tau, _ = c.step(dc, v_target=vf, yaw_target=yaw_cmd, delta_h=sc.dh(t),
-                        roll_target_offset=roff, dt=dt)
+        tau, info = c.step(dc, v_target=vf, yaw_target=yaw_cmd, delta_h=sc.dh(t),
+                           roll_target_offset=roff, dt=dt)
+        if safe_t is None and info.get("safe_fall"):
+            safe_t, p_safe = t, d.qpos[:2].copy()
         ts.append(time.perf_counter() - t0)
         d.ctrl[:] = act.apply(tau, d, dt) if act else tau
         mujoco.mj_step(m, d)
         log.append((t, theta, roll, vfwd, vf, d.qvel[5], yf, d.qpos[7], d.qpos[11],
                     math.remainder(heading - yaw0, 2 * math.pi), d.qpos[0]))
-        if R[2, 2] < 0.5:
+        if hit_t is None:
+            for i in range(d.ncon):
+                b1, b2 = m.geom_bodyid[d.contact.geom[i]]
+                if (hull[b1] and is_world[b2]) or (hull[b2] and is_world[b1]):
+                    hit_t = d.time
+                    mujoco.mj_objectVelocity(m, d, mujoco.mjtObj.mjOBJ_BODY, 1, vel6, 0)
+                    hit_v = float(np.linalg.norm(vel6[3:]))
+                    break
+        if p_safe is not None:
+            fall_travel = max(fall_travel, float(np.linalg.norm(d.qpos[:2] - p_safe)))
+            if d.time > safe_t + 0.5:          # after the brake has had time to act
+                fall_wheel_max = max(fall_wheel_max, float(np.abs(d.qvel[wheel_dofs]).max()))
+        if fell is None and (R[2, 2] < 0.5 or hit_t is not None):
             fell = t
-            break
+            if not sc.expect_fall:
+                break
+            t_end = d.time + FALL_POST
     L = np.array(log)
     late = L[:, 0] > 1.0
     if not late.any():
@@ -331,6 +374,11 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
         hiproll_max=float(np.abs(L[:, 7:9]).max()),
         heading_final=math.degrees(abs(L[-1, 9])),
         lane_max=float(np.abs(L[:, 10] - X_LANE).max()),
+        safe_fall=safe_t,
+        hit_t=hit_t,
+        hit_v=hit_v if hit_v is not None else 0.0,
+        fall_travel=fall_travel,
+        fall_wheel_max=fall_wheel_max,
         us_mean=float(us.mean()),
         us_p99=float(np.percentile(us, 99)),
     )
@@ -338,8 +386,16 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
 
 def check(sc, r):
     bad = []
-    if r["fell"] is not None:
-        bad.append(f"fell at {r['fell']:.2f}s")
+    if sc.expect_fall:
+        if r["safe_fall"] is None:
+            bad.append("no safe fall" + (" (did not fall)" if r["fell"] is None else ""))
+        elif r["hit_t"] is not None and r["safe_fall"] > r["hit_t"]:
+            bad.append(f"safe fall at {r['safe_fall']:.2f}s after impact at {r['hit_t']:.2f}s")
+    else:
+        if r["fell"] is not None:
+            bad.append(f"fell at {r['fell']:.2f}s")
+        if r["safe_fall"] is not None:
+            bad.append(f"safe fall triggered at {r['safe_fall']:.2f}s")
     bad += [f"{k}={r[k]:.3g}>{v}" for k, v in sc.limits.items() if r[k] > v]
     return bad
 
@@ -435,13 +491,22 @@ def main():
     print(f"[bench] {args.module}" + (f" (backend: {probe})" if probe else ""))
 
     if args.robust > 0:
-        return run_robust(args, scen, ctor_kw)
+        return run_robust(args, [s for s in scen if not s.expect_fall], ctor_kw)
 
     failures = []
     for sc in scen:
         r = run(sc, WBC, ctor_kw, args.cad)
         bad = check(sc, r)
         verdict = "ok" if not bad else ("known-fail" if sc.known_fail else "FAIL")
+        if sc.expect_fall:
+            f = lambda v: "%.2fs" % v if v is not None else "none"
+            print(f"{sc.name:<16} {verdict:<10} safe_fall={f(r['safe_fall']):<6} impact={f(r['hit_t']):<6} "
+                  f"impact_v={r['hit_v']:.2f}m/s travel={r['fall_travel']:.2f}m "
+                  f"wheel_after={r['fall_wheel_max']:.1f}rad/s"
+                  + (f"   [{'; '.join(bad)}]" if bad else ""), flush=True)
+            if bad:
+                failures.append(sc.name)
+            continue
         print(f"{sc.name:<16} {verdict:<10} "
               f"fell={'%.2fs' % r['fell'] if r['fell'] is not None else 'no':<6} "
               f"pitch rms/max={r['pitch_rms']:4.2f}/{r['pitch_max']:4.1f}° "
