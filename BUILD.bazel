@@ -77,18 +77,27 @@ cc_binary(
     ],
 )
 
-# Interactive GUI simulation target
+# Interactive GUI simulation target. Runs the BD droid (CAD_bd/) by default;
+#   bazel run //:sim_gui -- --cad CAD     # original robot (backflips, NMPC)
 cc_binary(
     name = "sim_gui",
     srcs = ["src/main_gui.cpp"],
+    args = [
+        "--cad",
+        "CAD_bd",
+    ],
     data = [
         ":libbalancer_mpc.so",
         ":libwbc.so",
+        ":libwbc_bd.so",
         "run_interactive_sim.py",
         "CAD/scene.xml",
         "CAD/wavy_scene.xml",
         "CAD/robot.xml",
         "CAD/assets",
+        "CAD_bd/scene.xml",
+        "CAD_bd/wavy_scene.xml",
+        "CAD_bd/robot.xml",
     ] + glob(["controllers/**"]),
 )
 
