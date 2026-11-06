@@ -178,7 +178,9 @@ def main():
         try:
             from controllers.wbc import WholeBodyController
             wbc_solver = WholeBodyController(m)
-            print("[Controller] Ascento Hierarchical Whole-Body QP Active (OSQP, 28 vars, friction cones, dynamics, 1 kHz)")
+            qp_name = "C++/HPIPM" if wbc_solver.backend == "cpp" else "Python/OSQP"
+            print(f"[Controller] LQR-assisted Whole-Body QP active ({qp_name}, 20 vars: qdd + contact forces, "
+                  "friction cones, joint limits, heading hold, 500 Hz)")
         except Exception as e:
             print(f"[Warning] Could not initialize WholeBodyController ({e}). Falling back to NMPC.")
             wbc_solver = None
@@ -337,6 +339,7 @@ def main():
 
     global_unwrapped_pitch = 0.0
     global_last_pitch = None
+    wbc_was_active = False
 
     try:
         if args.headless:
@@ -389,6 +392,8 @@ def main():
                     bf_timer = 0.0
                     bf_state = "idle"
                     settle_timer = 0.0
+                    if wbc_solver is not None:
+                        wbc_solver.reset()
                     print("\n[Reset] Robot reset to platform surface (z = 0.08m, zero velocity).")
 
                 last_sim_time = d.time
@@ -582,6 +587,7 @@ def main():
                     tau_diff = float(np.clip(tau_diff, -3.5, 3.5))
 
                 # Actuator Command Generation
+                wbc_ran_this_tick = False
                 if is_backflipping:
                     bf_timer += dt_sim
                     if bf_state == "crouch":
@@ -759,8 +765,11 @@ def main():
                             # Ascento Hierarchical Whole-Body QP Control
                             yaw_cmd = float(yaw_filtered)
                             if args.wavy and abs(yaw_rate_target) < 0.05:
+                                # Lane keeping on the runway centre line: x_err > 0 needs a CCW
+                                # (positive) heading; close the loop on heading, not just rate.
                                 x_err = float(d.qpos[0] - x_home)
-                                yaw_cmd = float(np.clip(- 1.2 * x_err, -0.20, 0.20))
+                                heading_cmd = float(np.clip(1.2 * x_err, -0.20, 0.20))
+                                yaw_cmd = float(np.clip(2.5 * (heading_cmd - yaw_heading), -0.6, 0.6))
 
                             roll_terrain_offset = 0.0
                             if args.wavy:
@@ -768,7 +777,17 @@ def main():
                                 roll_rate_now = float(d.qvel[4])
                                 roll_terrain_offset = float(np.clip(- (0.60 * roll_now + 0.05 * roll_rate_now), -0.25, 0.25))
 
-                            delta_h_cmd = - 0.05 * (qk_current / 0.08) if abs(qk_current) > 1e-4 else 0.0
+                            # C/T/N posture keys: qk_target in [-0.55, +0.20] -> base height offset.
+                            # (Negative = crouch; the WBC clamps to its reachable range.)
+                            alpha_q = min(1.0, 3.0 * dt_sim)
+                            qk_current += alpha_q * (qk_target - qk_current)
+                            delta_h_cmd = 0.10 * qk_current
+
+                            # WBC keeps internal state (odometry, filters); restart it whenever it
+                            # takes over from another mode (start, backflip, multi-flip settling).
+                            if not wbc_was_active:
+                                wbc_solver.reset()
+                            wbc_ran_this_tick = True
 
                             tau_wbc, wbc_info = wbc_solver.step(
                                 d,
@@ -835,6 +854,7 @@ def main():
                             d.ctrl[6] = -kp_leg * (d.qpos[13] - qk_L_cmd) - kd_knee_L_man * d.qvel[12]
                             d.ctrl[7] = 0.5 * tau_wheel + tau_diff
 
+                wbc_was_active = wbc_ran_this_tick
                 mujoco.mj_step(m, d)
                 step_count += 1
 

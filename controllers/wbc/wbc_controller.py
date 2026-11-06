@@ -1,292 +1,861 @@
 """
-Hierarchical Whole-Body Quadratic Programming (WBC QP) Controller
-for the 8-DOF Wheeled Biped Balancer Robot.
+LQR-Assisted Whole-Body QP Controller for the 8-DOF Wheeled Biped.
 
-Inspired by:
-"LQR-Assisted Whole-Body Control of a Wheeled Bipedal Robot with Kinematic Loops"
-(Klemm, Morra, Gulich, Mannhart, Rohr, Kamel, de Viragh, Siegwart - ETH Zurich / ASL, IEEE RAL 2020)
+Structure (after Klemm et al., "LQR-Assisted Whole-Body Control of a Wheeled
+Bipedal Robot with Kinematic Loops", IEEE RA-L 2020):
 
-Optimization Variables (nx = 28):
-  x = [qddot (14), F_c (6), tau (8)]
-    - qddot: Generalized accelerations (6 floating base + 8 actuated joints)
-    - F_c: 3D Contact forces at [Right_Wheel, Left_Wheel] in world frame
-    - tau: Actuation torques [hip_roll_R, hip_pitch_R, knee_R, wheel_R,
-                              hip_roll_L, hip_pitch_L, knee_L, wheel_L]
+  1. Balance layer (LQR): a wheeled-inverted-pendulum model built from the
+     robot's real mass / CoM height / composite pitch inertia. State is
+     [s - s_ref, v - v_ref, phi, phi_dot] where phi is the lean of the WHOLE-BODY
+     CoM over the wheel-axle midpoint (not base pitch). Output: desired forward
+     axle acceleration, plus feed-forward of the commanded acceleration and its
+     steady-state lean atan(a/g). Position is tracked by integrating v_ref in the
+     heading frame, so standstill is a true position hold after turning too.
 
-Physics & Constraints:
-  1. Multibody Dynamics: M(q) qddot - J_c^T F_c - S^T tau = -h(q, qdot)
-  2. Full 3D Contact Kinematics:
-     - X: Lateral no-slip
-     - Y: Longitudinal rolling contact (J_c,y qddot = -kd v_c,y)
-     - Z: Vertical terrain contact damping
-  3. Coulomb Friction Pyramids: |F_x| <= mu * F_z, |F_y| <= mu * F_z
-  4. Unilateral Contact & Gravity Support: F_z >= F_z_min > 0, centered on mg/2
-  5. Actuator Saturation: tau_min <= tau <= tau_max
+  2. Whole-body QP (OSQP, persistent, updated in place and warm-started):
+       x = [qddot (14), F_c (6)]            -- torques eliminated analytically
+       s.t.  M_b qdd - J_cb^T F = -h_b       (floating-base dynamics, 6 rows)
+             tau_min <= M_a qdd + h_a - J_ca^T F <= tau_max
+             friction pyramids, 0 <= F_z <= F_max (F = 0 when a wheel is airborne)
+             leg joint limits (look-ahead on q + qd*T + qdd*T^2/2)
+       min   sum_i w_i || J_i qdd - a_i* ||^2  + regularisation
+     Tasks: rolling contact (tangential rows at the real MuJoCo contact point,
+     normal row at the hub, with slip-velocity damping), axle acceleration (LQR),
+     base pitch / roll / yaw-rate, base height over the axle, lateral CoM over
+     the line of support, and joint posture from a leg-IK table that is
+     consistent with the commanded height.
+
+Base pitch is held level by the hips while the wheels balance the CoM. Wheel
+dry friction (MuJoCo frictionloss) is compensated feed-forward. Turns lean in by
+bank_gain * atan(v*w/g) and the turn command is limited to |v*w| <= a_lat_max.
+The yaw-rate command is integrated into a heading reference (heading hold), so
+yaw disturbances are steered back out instead of leaving a permanent offset.
+Wheel contact is decided from the estimated normal load (generalized-momentum
+observer on the floating-base rows), not from geometric distance, so attitude
+errors cannot make a loaded wheel look airborne. A slow integrator learns the
+lean offset at standstill (IMU tilt bias, CoM error) so the robot does not creep.
+
+Backends: WholeBodyController runs the per-tick solve in C++ (src/wbc/, Bazel
+target //:libwbc.so, HPIPM dense IPM, ~0.1 ms/tick) and falls back to the
+Python/OSQP reference implementation PyWholeBodyController (~0.8 ms/tick) when
+the library is not built. Force one with backend="cpp"/"python" or the
+WBC_BACKEND environment variable. Regression benchmark: tests/wbc_benchmark.py
+(`bazel test //:wbc_regression_test`).
 """
 
+import math
 import time
 import numpy as np
+import scipy.linalg as sla
 import scipy.sparse as sp
 import mujoco
 import osqp
 
+G = 9.81
+OSQP_INF = 1e30
 
-class WholeBodyController:
+
+def _cross(a, b):
+    return np.array([a[1] * b[2] - a[2] * b[1],
+                     a[2] * b[0] - a[0] * b[2],
+                     a[0] * b[1] - a[1] * b[0]])
+
+
+def _wrap(a):
+    return math.remainder(a, 2.0 * math.pi)
+
+
+def _lqr(A, B, Q, R):
+    P = sla.solve_continuous_are(A, B, Q, R)
+    return np.linalg.solve(R, B.T @ P)
+
+
+class PyWholeBodyController:
+    """Pure-Python reference implementation (OSQP). WholeBodyController below
+    runs the same algorithm natively (src/wbc/wbc_controller.cpp) when the
+    Bazel-built libwbc.so is available, and falls back to this class otherwise."""
+    # Gains / weights (class attributes so they are easy to override for tuning)
+    # LQR cost on [s, v, phi, phi_dot] and axle acceleration
+    lqr_Q = (30.0, 40.0, 100.0, 2.0)
+    lqr_R = 1.0
+    a_max = 4.0           # m/s^2, axle acceleration command clamp
+    s_err_max = 0.25      # m, position-error clamp (anti-windup after pushes)
+    use_ff = True
+    a_ff_max = 1.5        # m/s^2, feed-forward clamp (lean ff <= atan(a/g))
+
+    kp_pitch, kd_pitch = 150.0, 20.0
+    kp_roll, kd_roll = 150.0, 20.0
+    kp_yaw = 100.0
+    kp_heading = 4.0      # 1/s, heading-hold gain (yaw-rate correction per rad of heading error)
+    heading_err_max = 0.5 # rad, heading-error clamp (reference is dragged along beyond this)
+    kp_h, kd_h = 200.0, 25.0
+    kp_lat, kd_lat = 120.0, 22.0
+    kp_post, kd_post = 60.0, 12.0
+    max_bank = 0.30       # rad
+    lim_margin = 0.05     # rad, joint-limit margin
+    lim_T = 0.06          # s, joint-limit look-ahead horizon
+    bank_gain = 0.25      # fraction of the ZMP-neutral lean atan(v*w/g) to command
+    a_lat_max = 2.5       # m/s^2, lateral-acceleration limit on the turn command (2.7 left `extreme` on a knife edge)
+    contact_hold = 0.04   # s, contact hysteresis (rides through mesh/terrain bounces)
+    kd_wheel_air = 0.02   # Nm/(rad/s), airborne wheel speed-matching gain
+
+    w_contact = 1.0e4
+    w_axle = 200.0
+    w_pitch = 50.0
+    w_roll = 50.0
+    w_yaw = 100.0
+    w_height = 50.0
+    w_lat = 50.0
+    w_post = 1.0
+    w_post_roll = 1.0
+    w_tau = 1.0e-3
+    w_qdd = 1.0e-5
+    w_force = 1.0e-5
+    w_ftan = 1.0e-2       # tangential contact force (removes internal wheel 'squeeze')
+    kv_slip = 20.0        # 1/s, contact slip-velocity damping
+    # Contact state from estimated wheel load (momentum observer on the base
+    # rows) instead of geometric distance, which an attitude error corrupts.
+    contact_from_load = True
+    obs_K = 40.0          # 1/s, observer bandwidth
+    fz_on = 3.0           # N, load to (re)gain contact
+    fz_off = 1.0          # N, load below which (for contact_hold) the wheel is airborne
+    contact_geom_dist = 0.01   # m, geometric contacts closer than this give point/normal
+    # Lean-offset learning (PI on position through the lean channel)
+    ki_lean = 1.0         # 1/s
+    lean_off_max = 0.06   # rad
+    lean_learn_vmax = 0.05  # m/s, learn only near standstill (driving e_s is tracking lag)
+
     def __init__(self, model: mujoco.MjModel, mu: float = 0.85):
         self.m = model
-        self.nv = model.nv   # 14
-        self.nu = model.nu   # 8
-        self.nc = 6          # 2 wheels * 3D contact forces
-        self.nx = self.nv + self.nc + self.nu # 28
-
+        self.nv = model.nv            # 14
+        self.nu = model.nu            # 8
+        self.nc = 6                   # 2 wheels x 3D force
+        self.nx = self.nv + self.nc   # 20 decision variables
         self.mu = mu
-        self.Fz_min = 1.0    # Minimum contact force (N)
-        self.Fz_max = 60.0   # Maximum contact force (N)
+        self.Fz_max = 60.0
         self.wheel_radius = 0.05
 
-        # Actuation selection matrix S (8 x 14)
-        self.S = np.zeros((self.nu, self.nv))
-        self.S[:, 6:14] = np.eye(self.nu)
+        self.tau_max = np.array(model.actuator_ctrlrange[:, 1], dtype=float)
+        self.tau_min = np.array(model.actuator_ctrlrange[:, 0], dtype=float)
 
-        # Actuator torque limits from model (Nm)
-        self.tau_max = np.array([15.0, 15.0, 15.0, 5.0, 15.0, 15.0, 15.0, 5.0])
-        self.tau_min = -self.tau_max
-
-        # Calibrated Nominal Stance for Rev 3
-        self.qh_R_nom = 0.314503
-        self.qk_R_nom = -0.052919
-        self.qh_L_nom = -0.212551
-        self.qk_L_nom = 0.253279
-
-        # Wheel body IDs
         self.r_wheel_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "wheel")
         self.l_wheel_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "wheel_2")
+        self.wheel_ids = (self.r_wheel_id, self.l_wheel_id)
 
-        # Nominal relative base height above wheel axle midpoint
-        self.h_rel_nom = -0.0128
+        # Actuated dof indices (qvel) and their qpos addresses
+        self.act_dof = np.array([model.jnt_dofadr[model.actuator_trnid[i, 0]] for i in range(self.nu)])
+        self.act_qpos = np.array([model.jnt_qposadr[model.actuator_trnid[i, 0]] for i in range(self.nu)])
+        wheel_jnts = {mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n) for n in ("right_wheel", "left_wheel")}
+        roll_jnts = {mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n) for n in ("right_hip_roll", "left_hip_roll")}
+        self.leg_idx = [i for i in range(self.nu) if model.actuator_trnid[i, 0] not in wheel_jnts]
+        # Wheel actuator index per wheel body (same order as self.wheel_ids)
+        self.wheel_act = [next(i for i in range(self.nu)
+                               if model.jnt_bodyid[model.actuator_trnid[i, 0]] == wid)
+                          for wid in self.wheel_ids]
+        self.is_roll = np.array([model.actuator_trnid[i, 0] in roll_jnts for i in self.leg_idx])
+
+        # Nominal stance (Rev 3 calibration) -> nominal joint targets & base height
+        home = np.array([0, 0, 0.1172, 1, 0, 0, 0,
+                         0, 0.314503, -0.052919, 0, 0, -0.212551, 0.253279, 0])
+        if model.nkey > 0 and model.key_qpos.shape[1] == model.nq:
+            home = model.key_qpos[0].copy()
+        dh = mujoco.MjData(model)
+        dh.qpos[:] = home
+        mujoco.mj_forward(model, dh)
+        axle0 = 0.5 * (dh.xpos[self.r_wheel_id] + dh.xpos[self.l_wheel_id])
+        self.h_rel_nom = float(dh.xpos[1][2] - axle0[2])
+        # Nominal lateral CoM offset over the axle midpoint (model is asymmetric)
+        fwd0 = dh.xmat[1].reshape(3, 3)[:, 1]
+        rh0 = np.array([fwd0[1], -fwd0[0], 0.0]) / np.linalg.norm(fwd0[:2])
+        self.y_lat_nom = float(rh0 @ (dh.subtree_com[1] - axle0))
+
+        # Posture table: leg IK so joint-space posture targets agree with the
+        # commanded base height (otherwise the posture task fights the height
+        # task, and a weak posture task lets the leg nullspace drift).
+        self.dh_grid, self.q_grid = self._build_posture_table(model, home)
+        self.dh_min, self.dh_max = float(self.dh_grid[0]), float(self.dh_grid[-1])
+
+        # Wheeled-inverted-pendulum model from the real mass distribution
         self.total_mass = float(np.sum(model.body_mass))
-        self.Fz_gravity_per_wheel = 0.5 * self.total_mass * 9.81
+        com = dh.subtree_com[1]
+        fwd = dh.xmat[1].reshape(3, 3)[:, 1]
+        pitch_axis = np.cross(fwd, [0, 0, 1.0])
+        pitch_axis /= np.linalg.norm(pitch_axis)
+        Ic = 0.0
+        for b in range(1, model.nbody):
+            Rb = dh.ximat[b].reshape(3, 3)
+            Ib = Rb @ np.diag(model.body_inertia[b]) @ Rb.T
+            r = dh.xipos[b] - com
+            Ic += pitch_axis @ Ib @ pitch_axis + model.body_mass[b] * (r @ r - (r @ pitch_axis) ** 2)
+        l = float(com[2] - axle0[2])
+        m_ = self.total_mass
+        J = Ic + m_ * l * l
+        A = np.array([[0, 1, 0, 0],
+                      [0, 0, 0, 0],
+                      [0, 0, 0, 1],
+                      [0, 0, m_ * G * l / J, 0]])
+        B = np.array([[0], [1.0], [0], [-m_ * l / J]])
+        self.K = _lqr(A, B, np.diag(self.lqr_Q), np.array([[self.lqr_R]]))[0]
+        self.pend_l, self.pend_I = l, Ic
 
-        # Control Gains
-        self.kp_pitch = 140.0
-        self.kd_pitch = 18.0
-        self.kp_v = 0.35
-        self.ki_v = 0.08
-        self.max_tilt = 0.20
+        # Joint dry friction (MuJoCo frictionloss) is invisible to the QP's rigid-body
+        # model; with ~0.1 Nm per joint it eats most of the wheel torque budget.
+        # Compensated on the wheels only: on the near-static leg joints a smooth
+        # sign() feed-forward acts as strong negative damping and lets them drift.
+        self.fric = np.array([model.dof_frictionloss[d_] for d_ in self.act_dof])
+        self.fric[self.leg_idx] = 0.0
+        self.fric_vel = 0.05     # rad/s, tanh smoothing width
 
-        self.kp_h = 120.0
-        self.kd_h = 18.0
+        # Work buffers
+        self.M = np.zeros((self.nv, self.nv))
+        self._jp = np.zeros((3, self.nv))
+        self._jpd = np.zeros((3, self.nv))
+        self._build_qp()
 
-        self.kp_roll = 120.0
-        self.kd_roll = 18.0
+        # Precomputed per-tick constants
+        self.leg_qpos = self.act_qpos[self.leg_idx]
+        self.leg_dof = self.act_dof[self.leg_idx]
+        self.w_post_vec = np.where(self.is_roll, self.w_post_roll, self.w_post)
+        self.Fz_share = 0.5 * self.total_mass * G
+        self._P_const = np.zeros((self.nx, self.nx))
+        self._P_const[:self.nv, :self.nv] += self.w_qdd * np.eye(self.nv)
+        self._P_const[self.nv:, self.nv:] += self.w_force * np.eye(self.nc)
+        self._JT = np.zeros((12, self.nv))
+        self._bT = np.zeros(12)
+        self._wT = np.zeros(12)
+        self.reset()
 
-        self.kd_yaw = 25.0
+    def _build_posture_table(self, model, home):
+        """Leg IK over a grid of base-height offsets: keep each wheel hub at its
+        nominal fore-aft/lateral position under a level base, move it by -dh in z."""
+        dk = mujoco.MjData(model)
+        dk.qpos[:] = home
+        mujoco.mj_kinematics(model, dk)
+        hub0 = [dk.xpos[w].copy() for w in self.wheel_ids]
+        jac = np.zeros((3, model.nv))
+        legs = []
+        for wid in self.wheel_ids:
+            acts = [i for i in self.leg_idx if self._act_chain_has(model, i, wid)]
+            legs.append(acts)
+        grid = np.linspace(-0.08, 0.04, 25)
+        qs, ok_dh = [], []
+        for dh in grid:
+            dk.qpos[:] = home
+            good = True
+            for w, wid in enumerate(self.wheel_ids):
+                target = hub0[w] - np.array([0.0, 0.0, dh])
+                qa = self.act_qpos[legs[w]]
+                va = self.act_dof[legs[w]]
+                for _ in range(50):
+                    mujoco.mj_kinematics(model, dk)
+                    err = target - dk.xpos[wid]
+                    if np.linalg.norm(err) < 1e-6:
+                        break
+                    mujoco.mj_comPos(model, dk)
+                    mujoco.mj_jac(model, dk, jac, None, dk.xpos[wid], wid)
+                    Jl = jac[:, va]
+                    dq = Jl.T @ np.linalg.solve(Jl @ Jl.T + 1e-6 * np.eye(3), err)
+                    dk.qpos[qa] += dq
+                    lo, hi = model.jnt_range[model.actuator_trnid[legs[w], 0]].T
+                    dk.qpos[qa] = np.clip(dk.qpos[qa], lo + 0.05, hi - 0.05)
+                mujoco.mj_kinematics(model, dk)
+                good &= np.linalg.norm(target - dk.xpos[wid]) < 1e-3
+            if good:
+                qs.append(dk.qpos[self.act_qpos].copy())
+                ok_dh.append(dh)
+        return np.array(ok_dh), np.array(qs)
 
-        # Integral & hold state
-        self.v_int = 0.0
-        self.y_hold = None
-        self.last_tau = np.zeros(self.nu)
+    @staticmethod
+    def _act_chain_has(model, act, body):
+        b = body
+        jb = model.jnt_bodyid[model.actuator_trnid[act, 0]]
+        while b > 0:
+            if b == jb:
+                return True
+            b = model.body_parentid[b]
+        return False
+
+    def posture_for(self, delta_h):
+        """Joint posture (actuator order) for a base-height offset."""
+        dh = float(np.clip(delta_h, self.dh_min, self.dh_max))
+        i = int(np.clip(np.searchsorted(self.dh_grid, dh) - 1, 0, len(self.dh_grid) - 2))
+        f = (dh - self.dh_grid[i]) / (self.dh_grid[i + 1] - self.dh_grid[i])
+        return (1.0 - f) * self.q_grid[i] + f * self.q_grid[i + 1]
+
+    # ------------------------------------------------------------------ QP setup
+    def _build_qp(self):
+        nv, nc, nx, nu = self.nv, self.nc, self.nx, self.nu
+        # Constraint rows: 6 dyn eq | 8 tau | 8 friction | 2 Fz | leg joint limits
+        n_lim = len(self.leg_idx)
+        self.n_con = 6 + nu + 8 + 2 + n_lim
+        self.lim_row0 = 6 + nu + 8 + 2
+        A_fric = np.zeros((8, nx))
+        for w in range(2):
+            fx, fy, fz = nv + 3 * w, nv + 3 * w + 1, nv + 3 * w + 2
+            for k, (i, s) in enumerate([(fx, 1), (fx, -1), (fy, 1), (fy, -1)]):
+                A_fric[4 * w + k, i] = s
+                A_fric[4 * w + k, fz] = -self.mu
+        A_fz = np.zeros((2, nx))
+        A_fz[0, nv + 2] = 1.0
+        A_fz[1, nv + 5] = 1.0
+        A_lim = np.zeros((n_lim, nx))
+        for k, a in enumerate(self.leg_idx):
+            A_lim[k, self.act_dof[a]] = 1.0
+        self.A_static = np.vstack([A_fric, A_fz, A_lim])
+        jr = self.m.jnt_range[self.m.actuator_trnid[self.leg_idx, 0]]
+        self.q_lo = jr[:, 0] + self.lim_margin
+        self.q_hi = jr[:, 1] - self.lim_margin
+        self.A = np.zeros((self.n_con, nx))
+        self.A[6 + nu:] = self.A_static
+        self.l = np.zeros(self.n_con)
+        self.u = np.zeros(self.n_con)
+        self.l[6 + nu:6 + nu + 8] = -OSQP_INF
+
+        # Fully dense patterns so values can be updated in place every tick
+        A_pat = sp.csc_matrix(np.ones((self.n_con, nx)))
+        P_pat = sp.csc_matrix(np.triu(np.ones((nx, nx))))
+        self.P_rows, self.P_cols = P_pat.nonzero()
+        order = np.lexsort((self.P_rows, self.P_cols))   # CSC order: by col then row
+        self.P_rows, self.P_cols = self.P_rows[order], self.P_cols[order]
+
+        self.solver = osqp.OSQP()
+        self.solver.setup(P=P_pat, q=np.zeros(nx), A=A_pat,
+                          l=-np.ones(self.n_con), u=np.ones(self.n_con),
+                          verbose=False, polish=False, warm_starting=True,
+                          eps_abs=1e-5, eps_rel=1e-5, max_iter=200,
+                          adaptive_rho=True, check_termination=10)
+        # The public update()/solve() wrappers cost ~100 us per tick in Python
+        # (constant lookups, result namespaces); use the core object when present.
+        core = getattr(self.solver, "_solver", None)
+        self._core = core if all(hasattr(core, a) for a in
+                                 ("update_data_vec", "update_data_mat", "solve", "info", "solution")) else None
+
+    def _qp_solve(self, Px, q, Ax, l, u):
+        """Returns (ok, x, status_string)."""
+        if self._core is not None:
+            c = self._core
+            c.update_data_vec(q=q, l=l, u=u)
+            c.update_data_mat(P_x=Px, P_i=None, A_x=Ax, A_i=None)
+            c.solve()
+            st, x = c.info.status_val, c.solution.x
+        else:
+            self.solver.update(Px=Px, q=q, Ax=Ax, l=l, u=u)
+            res = self.solver.solve()
+            st, x = res.info.status_val, res.x
+            c = res
+        # 1 solved, 2 solved inaccurate, 7 max-iter: the last ADMM iterate is still a
+        # far better command than freezing the previous torque through a contact
+        # change (collapsed bounds for airborne wheels converge slowly).
+        ok = st in (1, 2) or (st == 7 and np.all(np.isfinite(x)))
+        return ok, x, c.info.status
 
     def reset(self):
-        self.v_int = 0.0
-        self.y_hold = None
+        self.s = 0.0
+        self.s_ref = 0.0
+        self.v_ref_prev = None
+        self.a_ref = 0.0
         self.last_tau = np.zeros(self.nu)
+        self.t_since_contact = [1.0, 1.0]
+        self.heading_ref = None
+        self.p_int = None
+        self.M_prev = None
+        self.contact_state = [True, True]
+        self.t_low = [0.0, 0.0]
+        self.Fn_est = np.zeros(2)
+        self.phi_off = 0.0
+
+    # --------------------------------------------------------------- helpers
+    def _point_jac(self, d, point, body):
+        mujoco.mj_jac(self.m, d, self._jp, None, point, body)
+        mujoco.mj_jacDot(self.m, d, self._jpd, None, point, body)
+        return self._jp.copy(), self._jpd @ d.qvel
+
+    def _wheel_contacts(self, d):
+        """Per wheel: (mean contact point, contact normal, in-contact flag)."""
+        out = []
+        n = d.ncon
+        if n:
+            con = d.contact
+            gb = self.m.geom_bodyid
+            b1, b2 = gb[con.geom1[:n]], gb[con.geom2[:n]]
+            near = con.dist[:n] < self.contact_geom_dist
+            close = con.dist[:n] < 2e-3
+        for wid in self.wheel_ids:
+            if n:
+                mine = (b1 == wid) | (b2 == wid)
+                sel = near & mine
+                k = int(sel.sum())
+                if k:
+                    nrm = con.frame[:n][sel, :3].sum(axis=0)
+                    nrm /= math.sqrt(nrm @ nrm)
+                    if nrm[2] < 0:            # MuJoCo normal points geom1 -> geom2
+                        nrm = -nrm
+                    out.append((con.pos[:n][sel].sum(axis=0) / k, nrm, bool((close & mine).any())))
+                    continue
+            p = d.xpos[wid].copy()
+            p[2] -= self.wheel_radius
+            out.append((p, np.array([0.0, 0.0, 1.0]), False))
+        return out
+
+    # ------------------------------------------------------------------ step
+    def step(self, d: mujoco.MjData, v_target: float, yaw_target: float,
+             delta_h: float = 0.0, roll_target_offset: float = 0.0,
+             dt: float = 0.002) -> tuple:
+        """One WBC tick. Returns (tau[8], info). Interface unchanged from the
+        original controller so run_interactive_sim.py works as before."""
+        t0 = time.perf_counter()
+        m, nv, nx = self.m, self.nv, self.nx
+        qv = d.qvel
+        # Turn-rate limiter: |v * omega| <= a_lat_max keeps the inner wheel loaded
+        w_cap = self.a_lat_max / max(abs(v_target), 1e-3)
+        yaw_target = min(max(yaw_target, -w_cap), w_cap)
+
+        # ---- Base state (heading frame: fh forward, rh right, both horizontal)
+        R = d.xmat[1].reshape(3, 3)
+        nf = math.hypot(R[0, 1], R[1, 1]) or 1e-6
+        fh = np.array([R[0, 1] / nf, R[1, 1] / nf, 0.0])
+        rh = np.array([fh[1], -fh[0], 0.0])
+        theta = math.atan2(R[2, 1], R[2, 2])       # base pitch (+ = nose up)
+        roll = math.atan2(R[0, 2], R[2, 2])        # base roll (+ = lean right)
+        wx, wy, wz = qv[3], qv[4], qv[5]
+
+        # ---- Wheel hubs / axle midpoint
+        rid, lid = self.wheel_ids
+        J_hub = [None, None]
+        Jd_hub = [None, None]
+        for w, wid in enumerate(self.wheel_ids):
+            J_hub[w], Jd_hub[w] = self._point_jac(d, d.xpos[wid], wid)
+        J_ax = 0.5 * (J_hub[0] + J_hub[1])
+        Jd_ax = 0.5 * (Jd_hub[0] + Jd_hub[1])
+        axle = 0.5 * (d.xpos[rid] + d.xpos[lid])
+        v_ax = J_ax @ qv
+        v_fwd = float(fh @ v_ax)
+
+        # ---- Rolling contact. The material point at the contact has zero
+        # TANGENTIAL acceleration (its normal acceleration is r*w^2 towards the
+        # hub), so tangential rows use the contact point, the normal row the hub.
+        # Slip-velocity damping stops MuJoCo's soft contacts from creeping.
+        Jc = np.zeros((6, nv))              # world-frame force Jacobian (dynamics)
+        Jk = np.zeros((6, nv))              # kinematic rows (contact frame)
+        bk = np.zeros(6)
+        in_contact = [False, False]
+        nrms = [None, None]
+        kv = self.kv_slip
+        for w, (pt, nrm, on) in enumerate(self._wheel_contacts(d)):
+            Jw, Jdw = self._point_jac(d, pt, self.wheel_ids[w])
+            Jc[3 * w:3 * w + 3] = Jw
+            t1 = _cross(nrm, fh)
+            t1 /= (math.sqrt(t1 @ t1) or 1e-6)
+            t2 = _cross(t1, nrm)
+            Tm = np.array([t1, t2])
+            vc = Jw @ qv
+            Jk[3 * w:3 * w + 2] = Tm @ Jw
+            Jk[3 * w + 2] = nrm @ J_hub[w]
+            bk[3 * w:3 * w + 2] = -(Tm @ Jdw + kv * (Tm @ vc))
+            bk[3 * w + 2] = -(nrm @ Jd_hub[w] + kv * (nrm @ (J_hub[w] @ qv)))
+            self.t_since_contact[w] = 0.0 if on else self.t_since_contact[w] + dt
+            nrms[w] = nrm
+
+        # ---- Wheel load estimate: momentum observer on the floating-base rows
+        # (no actuator torque / joint friction there), then Jc_b^T F = r.
+        mujoco.mj_fullM(m, d, self.M)
+        h = d.qfrc_bias
+        pb = self.M[:6] @ qv
+        if self.p_int is None:
+            self.p_int = pb - h[:6] / self.obs_K
+            mdq = np.zeros(6)
+        else:
+            mdq = (self.M[:6] - self.M_prev[:6]) @ qv / dt
+        r_obs = self.obs_K * (pb - self.p_int)
+        self.p_int = self.p_int + dt * (r_obs - h[:6] + mdq)
+        self.M_prev = self.M.copy()
+        A = Jc[:, :6].T
+        F = np.linalg.solve(A.T @ A + 1e-6 * np.eye(6), A.T @ r_obs)
+        for w in range(2):
+            self.Fn_est[w] = float(F[3 * w:3 * w + 3] @ nrms[w])
+            if self.contact_from_load:
+                if self.contact_state[w]:
+                    self.t_low[w] = self.t_low[w] + dt if self.Fn_est[w] < self.fz_off else 0.0
+                    if self.t_low[w] > self.contact_hold:
+                        self.contact_state[w] = False
+                elif self.Fn_est[w] > self.fz_on:
+                    self.contact_state[w] = True
+                    self.t_low[w] = 0.0
+                in_contact[w] = self.contact_state[w]
+            else:
+                in_contact[w] = self.t_since_contact[w] < self.contact_hold
+        n_on = in_contact[0] + in_contact[1]
+
+        # Airborne wheels: no ground to push on, so the QP must not use them as
+        # reaction wheels. Fix their torque to spin them to ground speed instead.
+        tau_air = {}
+        for w in range(2):
+            if not in_contact[w]:
+                a = self.wheel_act[w]
+                dof = self.act_dof[a]
+                k_w = Jk[3 * w + 1, dof]            # contact fwd speed per wheel rad/s
+                rate_ref = -v_fwd / k_w if abs(k_w) > 1e-4 else 0.0
+                tau_air[a] = min(max(-self.kd_wheel_air * (qv[dof] - rate_ref),
+                                     self.tau_min[a]), self.tau_max[a])
+
+        # ---- LQR balance layer on the whole-body CoM lean over the axle
+        mujoco.mj_jacSubtreeCom(m, d, self._jp, 1)
+        J_com = self._jp.copy()
+        rel = d.subtree_com[1] - axle
+        rel_v = J_com @ qv - v_ax
+        rf, rz = float(fh @ rel), float(rel[2])
+        phi = math.atan2(rf, rz)
+        phid = (float(fh @ rel_v) * rz - rf * rel_v[2]) / max(rf * rf + rz * rz, 1e-6)
+
+        if n_on:
+            self.s += v_fwd * dt
+            self.s_ref += v_target * dt
+        else:
+            self.s_ref = self.s
+        e_s = self.s - self.s_ref
+        if abs(e_s) > self.s_err_max:                    # anti-windup: drag reference along
+            e_s = math.copysign(self.s_err_max, e_s)
+            self.s_ref = self.s - e_s
+        # Reference feed-forward: commanded acceleration and the matching
+        # steady-state lean phi = atan(a/g) (removes most of the tracking lag)
+        if self.v_ref_prev is not None:
+            a_raw = (v_target - self.v_ref_prev) / dt
+            self.a_ref += min(1.0, 30.0 * dt) * (a_raw - self.a_ref)
+        self.v_ref_prev = v_target
+        a_ff = min(max(self.a_ref, -self.a_ff_max), self.a_ff_max) if self.use_ff else 0.0
+        K = self.K
+        # Learned lean offset (PI on position through the lean channel); frozen
+        # while the position error is clamped, a wheel is off the ground, or moving
+        # (while driving e_s is tracking lag, not an offset).
+        if (n_on == 2 and abs(self.s - self.s_ref) < self.s_err_max and K[2] != 0.0
+                and abs(v_target) < self.lean_learn_vmax and abs(yaw_target) < 0.1
+                and abs(self.a_ref) < 0.1):
+            self.phi_off -= dt * self.ki_lean * (K[0] / K[2]) * e_s
+            self.phi_off = min(max(self.phi_off, -self.lean_off_max), self.lean_off_max)
+        u_fb = -(K[0] * e_s + K[1] * (v_fwd - v_target) +
+                 K[2] * (phi - self.phi_off - math.atan(a_ff / G)) + K[3] * phid)
+        a_axle = min(max(a_ff + u_fb, -self.a_max), self.a_max)
+
+        # ---- Heading hold: integrate the yaw-rate command into a heading
+        # reference so yaw disturbances (pushes, slip, bumps) are steered back out
+        yaw = math.atan2(fh[1], fh[0])
+        if self.heading_ref is None or not n_on:
+            self.heading_ref = yaw
+        else:
+            self.heading_ref = _wrap(self.heading_ref + yaw_target * dt)
+        e_head = _wrap(yaw - self.heading_ref)
+        if abs(e_head) > self.heading_err_max:
+            e_head = math.copysign(self.heading_err_max, e_head)
+            self.heading_ref = _wrap(yaw - e_head)
+        yaw_rate_ref = yaw_target - self.kp_heading * e_head
+
+        # ---- Task references
+        # Lean INTO the commanded turn (feed-forward on the command: measured
+        # v*omega spikes on impacts and would kick the roll reference)
+        psi_bank = -self.bank_gain * math.atan2(v_target * yaw_target, G)
+        psi_ref = min(max(psi_bank + roll_target_offset, -self.max_bank), self.max_bank)
+        delta_h = min(max(delta_h, self.dh_min), self.dh_max)
+        rel_rh = float(rh @ rel)
+        h_rel = d.qpos[2] - axle[2]
+        hd_rel = qv[2] - v_ax[2]
+
+        # Stacked tasks: rows of J (qdd), b (desired J qdd), weights
+        JT, bT, wT = self._JT, self._bT, self._wT
+        JT[:] = 0.0
+        wT[:] = 0.0
+        for w in range(2):
+            if in_contact[w]:
+                r = slice(3 * w, 3 * w + 3)
+                JT[r] = Jk[r]
+                bT[r] = bk[r]
+                wT[r] = self.w_contact
+        if n_on:                                         # 6: axle acceleration (LQR)
+            JT[6] = fh @ J_ax
+            bT[6] = a_axle - fh @ Jd_ax
+            wT[6] = self.w_axle
+        JT[7, 3], bT[7], wT[7] = 1.0, -self.kp_pitch * theta - self.kd_pitch * wx, self.w_pitch
+        JT[8, 4], bT[8], wT[8] = 1.0, -self.kp_roll * (roll - psi_ref) - self.kd_roll * wy, self.w_roll
+        JT[9, 5], bT[9], wT[9] = 1.0, self.kp_yaw * (yaw_rate_ref - wz), self.w_yaw
+        JT[10] = -J_ax[2]                                # base height over axle
+        JT[10, 2] += 1.0
+        bT[10] = self.kp_h * (self.h_rel_nom + delta_h - h_rel) - self.kd_h * hd_rel + Jd_ax[2]
+        wT[10] = self.w_height
+        JT[11] = rh @ (J_com - J_ax)                     # lateral CoM over line of support
+        bT[11] = (self.kp_lat * (self.y_lat_nom + rz * math.tan(psi_ref) - rel_rh)
+                  - self.kd_lat * float(rh @ rel_v) - float(rh @ Jd_ax))
+        wT[11] = self.w_lat
+
+        P = self._P_const.copy()
+        q = np.zeros(nx)
+        WJ = JT * wT[:, None]
+        P[:nv, :nv] += JT.T @ WJ
+        q[:nv] -= WJ.T @ bT
+
+        # Joint posture from the leg-IK table (consistent with delta_h)
+        q_leg = d.qpos[self.leg_qpos]
+        dq_leg = qv[self.leg_dof]
+        a_post = self.kp_post * (self.posture_for(delta_h)[self.leg_idx] - q_leg) - self.kd_post * dq_leg
+        P[self.leg_dof, self.leg_dof] += self.w_post_vec
+        q[self.leg_dof] -= self.w_post_vec * a_post
+
+        # Tangential contact forces (heading frame) -> no internal wheel squeeze
+        Ft = self.w_ftan * (np.outer(fh, fh) + np.outer(rh, rh))
+        P[nv:nv + 3, nv:nv + 3] += Ft
+        P[nv + 3:nv + 6, nv + 3:nv + 6] += Ft
+
+        # ---- Dynamics: tau = M_a qdd + h_a - Jc_a^T F  (torques eliminated)
+        ad = self.act_dof
+        A_tau = np.hstack([self.M[ad], -Jc[:, ad].T])     # nu x nx
+        b_tau = h[ad]
+        P += self.w_tau * (A_tau.T @ A_tau)
+        q += self.w_tau * (A_tau.T @ b_tau)
+        if n_on == 2:          # weak gravity-share prior keeps F well posed
+            P[nv + 2, nv + 2] += 1e-4
+            P[nv + 5, nv + 5] += 1e-4
+            q[nv + 2] -= 1e-4 * self.Fz_share
+            q[nv + 5] -= 1e-4 * self.Fz_share
+
+        # ---- Constraints
+        A, lo, up, nu = self.A, self.l, self.u, self.nu
+        A[:6, :nv] = self.M[:6]
+        A[:6, nv:] = -Jc[:, :6].T
+        lo[:6] = up[:6] = -h[:6]
+        A[6:6 + nu] = A_tau
+        lo[6:6 + nu] = self.tau_min - b_tau
+        up[6:6 + nu] = self.tau_max - b_tau
+        for a, ta in tau_air.items():
+            dof = ad[a]
+            lo[6 + a] = up[6 + a] = ta - b_tau[a] - self.fric[a] * math.tanh(qv[dof] / self.fric_vel)
+        fz_rows = 6 + nu + 8
+        for w in range(2):
+            up[fz_rows + w] = self.Fz_max if in_contact[w] else 0.0
+        # Joint limits: keep q + qd*T + 0.5*qdd*T^2 inside [lo, hi]
+        T = self.lim_T
+        qp = q_leg + dq_leg * T
+        amax = 2.0 / (T * T)
+        llim = np.clip(amax * (self.q_lo - qp), -1e3, 1e3)
+        ulim = np.clip(amax * (self.q_hi - qp), -1e3, 1e3)
+        bad = llim > ulim                     # already past a margin: stay feasible
+        if bad.any():
+            mid = 0.5 * (llim + ulim)
+            llim[bad] = ulim[bad] = mid[bad]
+        lo[self.lim_row0:] = llim
+        up[self.lim_row0:] = ulim
+
+        ok, x, status = self._qp_solve(P[self.P_rows, self.P_cols], q, A.T.ravel(), lo, up)
+        if ok:
+            tau = A_tau @ x + b_tau
+            tau += self.fric * np.tanh(qv[ad] / self.fric_vel)
+            tau = np.clip(tau, self.tau_min, self.tau_max)
+            Fc = x[nv:]
+            self.last_tau = tau
+        else:
+            tau = self.last_tau.copy()
+            Fc = np.zeros(self.nc)
+
+        info = {
+            "status": status,
+            "solve_time_us": (time.perf_counter() - t0) * 1e6,
+            "th_ref": phi,
+            "psi_ref": psi_ref,
+            "a_axle": a_axle,
+            "Fc": Fc,
+            "pitch_deg": math.degrees(theta),
+            "roll_deg": math.degrees(roll),
+            "lean_deg": math.degrees(phi),
+            "contacts": n_on,
+            "heading_err": e_head,
+            "Fn_est": self.Fn_est.copy(),
+            "phi_off": self.phi_off,
+            "qdd": x[:nv].copy() if ok else np.zeros(nv),
+        }
+        return tau, info
+
+
+# ---------------------------------------------------------------------------
+# Native backend (src/wbc/wbc_controller.cpp, Bazel target //:libwbc.so)
+# ---------------------------------------------------------------------------
+import ctypes
+import os
+
+_MAX_ACT, _MAX_GRID = 16, 64
+_GAIN_FIELDS = (
+    "a_max", "s_err_max", "a_ff_max", "use_ff",
+    "kp_pitch", "kd_pitch", "kp_roll", "kd_roll", "kp_yaw",
+    "kp_heading", "heading_err_max",
+    "kp_h", "kd_h", "kp_lat", "kd_lat", "kp_post", "kd_post",
+    "max_bank", "lim_T", "bank_gain", "a_lat_max", "contact_hold", "kd_wheel_air",
+    "w_contact", "w_axle", "w_pitch", "w_roll", "w_yaw", "w_height", "w_lat",
+    "w_post", "w_post_roll", "w_tau", "w_qdd", "w_force", "w_ftan", "kv_slip",
+    "contact_from_load", "obs_K", "fz_on", "fz_off", "contact_geom_dist",
+    "ki_lean", "lean_off_max", "lean_learn_vmax",
+)
+
+
+class _WbcParams(ctypes.Structure):
+    # Must match struct WbcParams in src/wbc/wbc_params.h field for field.
+    _fields_ = [
+        ("nu", ctypes.c_int), ("n_leg", ctypes.c_int), ("n_grid", ctypes.c_int), ("pad0", ctypes.c_int),
+        ("act_dof", ctypes.c_int * _MAX_ACT), ("act_qpos", ctypes.c_int * _MAX_ACT),
+        ("leg_idx", ctypes.c_int * _MAX_ACT), ("is_roll", ctypes.c_int * _MAX_ACT),
+        ("wheel_body", ctypes.c_int * 2), ("wheel_act", ctypes.c_int * 2),
+        ("tau_min", ctypes.c_double * _MAX_ACT), ("tau_max", ctypes.c_double * _MAX_ACT),
+        ("fric", ctypes.c_double * _MAX_ACT),
+        ("q_lo", ctypes.c_double * _MAX_ACT), ("q_hi", ctypes.c_double * _MAX_ACT),
+        ("dh_grid", ctypes.c_double * _MAX_GRID), ("q_grid", ctypes.c_double * (_MAX_GRID * _MAX_ACT)),
+        ("K", ctypes.c_double * 4),
+        ("h_rel_nom", ctypes.c_double), ("y_lat_nom", ctypes.c_double), ("total_mass", ctypes.c_double),
+        ("mu", ctypes.c_double), ("Fz_max", ctypes.c_double), ("wheel_radius", ctypes.c_double),
+        ("fric_vel", ctypes.c_double),
+    ] + [(n, ctypes.c_double) for n in _GAIN_FIELDS]
+
+
+# info vector layout (enum in wbc_params.h)
+(_I_STATUS, _I_US, _I_PHI, _I_PSI, _I_AAX, _I_PITCH, _I_ROLL, _I_CONT, _I_HEAD, _I_ITER,
+ _I_FNR, _I_FNL, _I_PHIOFF, _I_FC) = range(14)
+_I_QDD = _I_FC + 6
+
+_LIB = None
+_LIB_ERR = None
+
+
+def _load_lib():
+    global _LIB, _LIB_ERR
+    if _LIB is not None or _LIB_ERR is not None:
+        return _LIB
+    here = os.path.dirname(os.path.abspath(__file__))
+    cands = []
+    if os.environ.get("WBC_LIB"):
+        cands.append(os.environ["WBC_LIB"])
+    if "RUNFILES_DIR" in os.environ:
+        cands.append(os.path.join(os.environ["RUNFILES_DIR"], "_main", "libwbc.so"))
+    cands += [os.path.join(here, "../../libwbc.so"),            # bazel runfiles layout
+              os.path.join(here, "../../bazel-bin/libwbc.so"),  # source tree after `bazel build`
+              "bazel-bin/libwbc.so"]
+    for path in cands:
+        if not os.path.exists(path):
+            continue
+        try:
+            lib = ctypes.CDLL(os.path.abspath(path))
+        except OSError as e:
+            _LIB_ERR = f"{path}: {e}"
+            continue
+        if lib.wbc_params_size() != ctypes.sizeof(_WbcParams):
+            _LIB_ERR = (f"{path}: WbcParams size mismatch (C {lib.wbc_params_size()} vs "
+                        f"Python {ctypes.sizeof(_WbcParams)}); rebuild //:libwbc.so")
+            continue
+        vp, dp = ctypes.c_void_p, ctypes.POINTER(ctypes.c_double)
+        lib.wbc_create.restype = vp
+        lib.wbc_create.argtypes = [vp, ctypes.POINTER(_WbcParams)]
+        lib.wbc_destroy.argtypes = [vp]
+        lib.wbc_reset.argtypes = [vp]
+        lib.wbc_step.restype = ctypes.c_int
+        lib.wbc_step.argtypes = [vp, vp, vp] + [ctypes.c_double] * 5 + [dp, dp]
+        _LIB, _LIB_ERR = lib, None
+        return lib
+    if _LIB_ERR is None:
+        _LIB_ERR = "libwbc.so not found (build it with `bazel build //:libwbc.so`)"
+    return None
+
+
+class WholeBodyController(PyWholeBodyController):
+    """Whole-body controller with a native (C++/HPIPM) per-tick solve.
+
+    Same interface as PyWholeBodyController. Setup (LQR gain, posture table,
+    model indices) runs in Python; step() runs entirely in C++ on the live
+    mjData. backend: "auto" (default; env WBC_BACKEND overrides), "cpp" or
+    "python". `self.backend` reports what is actually in use."""
+
+    def __init__(self, model: mujoco.MjModel, mu: float = 0.85, backend: str = None):
+        super().__init__(model, mu)
+        backend = backend or os.environ.get("WBC_BACKEND", "auto")
+        self.backend = "python"
+        self._h = None
+        if backend == "python":
+            return
+        lib = _load_lib()
+        if lib is None:
+            if backend == "cpp":
+                raise RuntimeError(f"C++ WBC unavailable: {_LIB_ERR}")
+            print(f"[WBC] C++ backend unavailable ({_LIB_ERR}); using Python/OSQP.")
+            return
+        self._lib = lib
+        self._params = self._make_params()
+        self._h = lib.wbc_create(ctypes.c_void_p(model._address), ctypes.byref(self._params))
+        if not self._h:
+            if backend == "cpp":
+                raise RuntimeError("wbc_create failed")
+            return
+        self.backend = "cpp"
+        self._m_addr = ctypes.c_void_p(model._address)
+        self._tau = np.zeros(self.nu)
+        self._info = np.zeros(_I_QDD + self.nv)
+        self._tau_p = self._tau.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        self._info_p = self._info.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        self._d_addr = (None, None)
+
+    def _make_params(self):
+        P = _WbcParams()
+        nu, legs = self.nu, list(self.leg_idx)
+        if nu > _MAX_ACT or len(self.dh_grid) > _MAX_GRID:
+            raise ValueError("model too large for WbcParams")
+        P.nu, P.n_leg, P.n_grid = nu, len(legs), len(self.dh_grid)
+        for i in range(nu):
+            P.act_dof[i], P.act_qpos[i] = int(self.act_dof[i]), int(self.act_qpos[i])
+            P.tau_min[i], P.tau_max[i], P.fric[i] = self.tau_min[i], self.tau_max[i], self.fric[i]
+        for k, a in enumerate(legs):
+            P.leg_idx[k], P.is_roll[k] = int(a), int(self.is_roll[k])
+            P.q_lo[k], P.q_hi[k] = self.q_lo[k], self.q_hi[k]
+        for w in range(2):
+            P.wheel_body[w], P.wheel_act[w] = int(self.wheel_ids[w]), int(self.wheel_act[w])
+        for g in range(len(self.dh_grid)):
+            P.dh_grid[g] = self.dh_grid[g]
+            for i in range(nu):
+                P.q_grid[g * nu + i] = self.q_grid[g, i]
+        for i in range(4):
+            P.K[i] = self.K[i]
+        P.h_rel_nom, P.y_lat_nom, P.total_mass = self.h_rel_nom, self.y_lat_nom, self.total_mass
+        P.mu, P.Fz_max, P.wheel_radius, P.fric_vel = self.mu, self.Fz_max, self.wheel_radius, self.fric_vel
+        for n in _GAIN_FIELDS:
+            setattr(P, n, float(getattr(self, n)))
+        return P
+
+    def reset(self):
+        super().reset()
+        if getattr(self, "_h", None):
+            self._lib.wbc_reset(self._h)
+
+    def __del__(self):
+        h = getattr(self, "_h", None)
+        if h:
+            self._lib.wbc_destroy(h)
+            self._h = None
 
     def step(self, d: mujoco.MjData, v_target: float, yaw_target: float,
              delta_h: float = 0.0, roll_target_offset: float = 0.0,
              dt: float = 0.002) -> tuple:
-        """
-        Solves one iteration of the Whole-Body QP and returns optimal torques.
-        Args:
-            d: MuJoCo data instance
-            v_target: Forward ground velocity target (m/s)
-            yaw_target: Heading yaw angular rate target (rad/s)
-            delta_h: Relative base height adjustment (m) (e.g. -0.03 for crouch, +0.02 for stand)
-            roll_target_offset: Roll bank offset (rad) for terrain compensation
-            dt: Simulation timestep (s)
-        Returns:
-            tau_cmd (np.ndarray): 8 motor torques
-            info (dict): Solve metrics
-        """
-        t0 = time.time()
-
-        # 1. 3D Invariant Robot Kinematics
-        R = d.xmat[1].reshape(3, 3)
-        fwd = R[:, 1]
-        theta = float(np.arctan2(R[2, 1], R[2, 2]))
-        omega_pitch = float(d.qvel[3])
-        omega_yaw = float(d.qvel[5])
-        v_fwd = float(np.dot(d.qvel[0:3], fwd))
-        roll = float(np.arctan2(R[0, 2], R[2, 2]))
-        roll_rate = float(d.qvel[4])
-
-        # Stationary position holding lock
-        if abs(v_target) < 0.05 and abs(v_fwd) < 0.15:
-            if self.y_hold is None:
-                self.y_hold = float(d.qpos[1])
-            v_target_adj = float(np.clip(- 1.5 * (d.qpos[1] - self.y_hold), -0.25, 0.25))
-        else:
-            self.y_hold = None
-            v_target_adj = v_target
-
-        # Velocity anti-windup integration
-        v_err = v_fwd - v_target_adj
-        self.v_int += v_err * dt
-        self.v_int = float(np.clip(self.v_int, -0.30, 0.30))
-
-        # 2. Ascento LQR Balancing Motion Task (Klemm et al. 2020 Eq 36-37)
-        th_ref = self.kp_v * v_err + self.ki_v * self.v_int
-        th_ref = float(np.clip(th_ref, -self.max_tilt, self.max_tilt))
-        a_pitch_des = - (self.kp_pitch * (theta - th_ref) + self.kd_pitch * omega_pitch)
-
-        # 3. Base Height Task relative to wheel midpoint (Ascento Eq 33)
-        pt_R = d.xpos[self.r_wheel_id].copy(); pt_R[2] -= self.wheel_radius
-        pt_L = d.xpos[self.l_wheel_id].copy(); pt_L[2] -= self.wheel_radius
-        mid_w_z = 0.5 * (pt_R[2] + pt_L[2]) + self.wheel_radius
-        h_rel = d.qpos[2] - mid_w_z
-        target_h_rel = self.h_rel_nom + delta_h
-        a_h_des = - (self.kp_h * (h_rel - target_h_rel) + self.kd_h * d.qvel[2])
-
-        # 4. Base Roll & ZMP Curve Banking Task (Ascento Sec III-B.3)
-        a_lat = v_fwd * omega_yaw
-        psi_zmp = float(np.arctan2(a_lat, 9.81))
-        # Curve bank is active only when driving forward; stationary turns stay upright
-        k_bank = float(np.clip(abs(v_fwd) / 0.50, 0.0, 1.0))
-        psi_ref = float(np.clip(k_bank * (0.35 * yaw_target + 0.50 * psi_zmp) + roll_target_offset, -0.35, 0.35))
-        a_roll_des = - (self.kp_roll * (roll - psi_ref) + self.kd_roll * roll_rate)
-
-        # 5. Base Yaw Steering Task (Ascento Sec III-B.5)
-        a_yaw_des = - self.kd_yaw * (omega_yaw - yaw_target)
-
-        # 6. Extract Analytical Multibody Dynamics from MuJoCo
-        M = np.zeros((self.nv, self.nv))
-        mujoco.mj_fullM(self.m, d, M)
-        h = d.qfrc_bias.copy()
-
-        jac_R = np.zeros((3, self.nv))
-        jac_L = np.zeros((3, self.nv))
-        mujoco.mj_jac(self.m, d, jac_R, None, pt_R, self.r_wheel_id)
-        mujoco.mj_jac(self.m, d, jac_L, None, pt_L, self.l_wheel_id)
-        Jc = np.vstack([jac_R, jac_L]) # 6 x 14
-
-        # Contact velocities in world frame
-        v_c_R = jac_R @ d.qvel
-        v_c_L = jac_L @ d.qvel
-
-        # 7. Rigid-Body Dynamics Equality Constraint
-        # M(q) qddot - J_c^T F_c - S^T tau = -h(q, qdot)
-        A_dyn = np.hstack([M, -Jc.T, -self.S.T])
-        b_dyn = -h
-
-        # 8. Friction Pyramids & Bounds: |Fx| <= mu*Fz, |Fy| <= mu*Fz
-        A_fric = np.zeros((8, self.nx))
-        A_fric[0, self.nv+0] = +1.0; A_fric[0, self.nv+2] = -self.mu
-        A_fric[1, self.nv+0] = -1.0; A_fric[1, self.nv+2] = -self.mu
-        A_fric[2, self.nv+1] = +1.0; A_fric[2, self.nv+2] = -self.mu
-        A_fric[3, self.nv+1] = -1.0; A_fric[3, self.nv+2] = -self.mu
-
-        A_fric[4, self.nv+3] = +1.0; A_fric[4, self.nv+5] = -self.mu
-        A_fric[5, self.nv+3] = -1.0; A_fric[5, self.nv+5] = -self.mu
-        A_fric[6, self.nv+4] = +1.0; A_fric[6, self.nv+5] = -self.mu
-        A_fric[7, self.nv+4] = -1.0; A_fric[7, self.nv+5] = -self.mu
-
-        # Normal contact force bounds
-        A_fz = np.zeros((2, self.nx))
-        A_fz[0, self.nv+2] = 1.0 # F_z,R
-        A_fz[1, self.nv+5] = 1.0 # F_z,L
-
-        # Actuator torque limits
-        A_tau = np.zeros((self.nu, self.nx))
-        A_tau[:, self.nv+self.nc:] = np.eye(self.nu)
-
-        A_all = np.vstack([A_dyn, A_fric, A_fz, A_tau])
-        l_all = np.concatenate([b_dyn, -np.inf * np.ones(8), [self.Fz_min, self.Fz_min], self.tau_min])
-        u_all = np.concatenate([b_dyn, np.zeros(8), [self.Fz_max, self.Fz_max], self.tau_max])
-
-        # 9. Quadratic Cost Function
-        P = np.zeros((self.nx, self.nx))
-        q_cost = np.zeros(self.nx)
-
-        # 3D Contact Kinematics (No-slip X, rolling contact Y, terrain contact Z)
-        w_cont = 150.0
-        kd_cont = 15.0
-        a_cont_des_R = - kd_cont * v_c_R
-        a_cont_des_L = - kd_cont * v_c_L
-        P[:self.nv, :self.nv] += w_cont * (jac_R.T @ jac_R + jac_L.T @ jac_L)
-        q_cost[:self.nv] -= w_cont * (jac_R.T @ a_cont_des_R + jac_L.T @ a_cont_des_L)
-
-        # Gravity support force prior: maintain positive support force ~mg/2
-        w_fz = 5.0
-        P[self.nv+2, self.nv+2] += w_fz; q_cost[self.nv+2] -= w_fz * self.Fz_gravity_per_wheel
-        P[self.nv+5, self.nv+5] += w_fz; q_cost[self.nv+5] -= w_fz * self.Fz_gravity_per_wheel
-
-        # Relative Base Height Task
-        w_height = 60.0
-        P[2, 2] += w_height
-        q_cost[2] -= w_height * a_h_des
-
-        # Balancing Motion Task (Pitch)
-        w_pitch = 140.0
-        P[3, 3] += w_pitch
-        q_cost[3] -= w_pitch * a_pitch_des
-
-        # Base Roll Task
-        w_roll = 110.0
-        P[4, 4] += w_roll
-        q_cost[4] -= w_roll * a_roll_des
-
-        # Base Yaw Steering Task
-        w_yaw = 40.0
-        P[5, 5] += w_yaw
-        q_cost[5] -= w_yaw * a_yaw_des
-
-        # Normal Force Equalization on rough / wavy terrain
-        w_fb = 2.0
-        P[self.nv+2, self.nv+2] += w_fb; P[self.nv+5, self.nv+5] += w_fb
-        P[self.nv+2, self.nv+5] -= w_fb; P[self.nv+5, self.nv+2] -= w_fb
-
-        # Stiff Leg Joint Stance Posture Regularization:
-        # Hip roll joints (indices 6 and 10) must be held tightly near 0 to avoid hitting 0.6 rad limits!
-        w_post_roll = 35.0
-        P[6, 6] += w_post_roll; q_cost[6] -= w_post_roll * (- 45.0 * d.qpos[7] - 8.0 * d.qvel[6])
-        P[10, 10] += w_post_roll; q_cost[10] -= w_post_roll * (- 45.0 * d.qpos[11] - 8.0 * d.qvel[10])
-
-        w_post_leg = 25.0
-        qh_R_post = self.qh_R_nom + 0.40 * th_ref
-        qh_L_post = self.qh_L_nom - 0.40 * th_ref
-        P[7, 7] += w_post_leg; q_cost[7] -= w_post_leg * (- 45.0 * (d.qpos[8] - qh_R_post) - 8.0 * d.qvel[7])
-        P[8, 8] += w_post_leg; q_cost[8] -= w_post_leg * (- 45.0 * (d.qpos[9] - self.qk_R_nom) - 8.0 * d.qvel[8])
-        P[11, 11] += w_post_leg; q_cost[11] -= w_post_leg * (- 45.0 * (d.qpos[12] - qh_L_post) - 8.0 * d.qvel[11])
-        P[12, 12] += w_post_leg; q_cost[12] -= w_post_leg * (- 45.0 * (d.qpos[13] - self.qk_L_nom) - 8.0 * d.qvel[12])
-
-        # Actuation Torque Minimization
-        P[self.nv+self.nc:, self.nv+self.nc:] += 1e-3 * np.eye(self.nu)
-
-        # 10. Solve with OSQP
-        solver = osqp.OSQP()
-        solver.setup(P=sp.csc_matrix(P), q=q_cost, A=sp.csc_matrix(A_all), l=l_all, u=u_all,
-                     verbose=False, polish=False, eps_abs=1e-3, eps_rel=1e-3, max_iter=400)
-        results = solver.solve()
-
-        solve_time_us = (time.time() - t0) * 1e6
-
-        if results.info.status_val in [1, 2]: # optimal or optimal_inaccurate
-            x_opt = results.x
-            tau_cmd = x_opt[self.nv+self.nc:]
-            Fc = x_opt[self.nv:self.nv+self.nc]
-            self.last_tau = tau_cmd.copy()
-        else:
-            # Fallback to last valid command rather than zeroing torques
-            tau_cmd = self.last_tau.copy()
-            Fc = np.zeros(self.nc)
-
+        if self.backend != "cpp":
+            return super().step(d, v_target, yaw_target, delta_h, roll_target_offset, dt)
+        if self._d_addr[0] is not d:
+            self._d_addr = (d, ctypes.c_void_p(d._address))
+        rc = self._lib.wbc_step(self._h, self._m_addr, self._d_addr[1], v_target, yaw_target,
+                                delta_h, roll_target_offset, dt, self._tau_p, self._info_p)
+        I, nv = self._info, self.nv
         info = {
-            "status": results.info.status,
-            "solve_time_us": solve_time_us,
-            "th_ref": th_ref,
-            "psi_ref": psi_ref,
-            "Fc": Fc,
-            "pitch_deg": np.degrees(theta),
-            "roll_deg": np.degrees(roll),
+            "status": "solved" if rc == 0 else f"failed ({int(I[_I_STATUS])})",
+            "solve_time_us": I[_I_US],
+            "th_ref": I[_I_PHI],
+            "psi_ref": I[_I_PSI],
+            "a_axle": I[_I_AAX],
+            "Fc": I[_I_FC:_I_QDD].copy(),
+            "pitch_deg": math.degrees(I[_I_PITCH]),
+            "roll_deg": math.degrees(I[_I_ROLL]),
+            "lean_deg": math.degrees(I[_I_PHI]),
+            "contacts": int(I[_I_CONT]),
+            "heading_err": I[_I_HEAD],
+            "qp_iter": int(I[_I_ITER]),
+            "Fn_est": I[_I_FNR:_I_FNL + 1].copy(),
+            "phi_off": I[_I_PHIOFF],
+            "qdd": I[_I_QDD:_I_QDD + nv].copy(),
         }
-        return tau_cmd, info
+        return self._tau.copy(), info

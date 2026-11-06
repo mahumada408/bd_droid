@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -83,10 +83,53 @@ cc_binary(
     srcs = ["src/main_gui.cpp"],
     data = [
         ":libbalancer_mpc.so",
+        ":libwbc.so",
         "run_interactive_sim.py",
         "CAD/scene.xml",
         "CAD/wavy_scene.xml",
         "CAD/robot.xml",
         "CAD/assets",
     ] + glob(["controllers/**"]),
+)
+
+# C++ whole-body controller (LQR-assisted QP, HPIPM) loaded by
+# controllers/wbc/wbc_controller.py through ctypes. It operates directly on the
+# Python bindings' mjModel/mjData, so it must use the same libmujoco build.
+cc_binary(
+    name = "libwbc.so",
+    srcs = [
+        "src/wbc/wbc_controller.cpp",
+        "src/wbc/wbc_params.h",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-fPIC",
+    ],
+    linkshared = True,
+    linkopts = [
+        "-Wl,-rpath,/home/manuel/.local/lib/python3.10/site-packages/mujoco",
+        "-Wl,-rpath,/home/manuel/software/acados/lib",
+    ],
+    deps = [
+        "//third_party/acados:acados",
+        "//third_party/mujoco:mujoco",
+    ],
+)
+
+# Closed-loop WBC regression benchmark (19 scenarios, ~1-2 min).
+#   bazel test //:wbc_regression_test --test_output=all
+cc_test(
+    name = "wbc_regression_test",
+    size = "medium",
+    srcs = ["tests/wbc_regression_test.cpp"],
+    data = [
+        ":libwbc.so",
+        "tests/wbc_benchmark.py",
+        "CAD/scene.xml",
+        "CAD/wavy_scene.xml",
+        "CAD/robot.xml",
+        "CAD/assets",
+    ] + glob(["controllers/**/*.py"]),
+    tags = ["local"],
 )
