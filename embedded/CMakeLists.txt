@@ -65,6 +65,22 @@ target_compile_features(wbc_core PUBLIC cxx_std_17)
 target_compile_options(wbc_core PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter)
 target_link_libraries(wbc_core PUBLIC hpipm blasfeo)
 
+# Robot model: empty = src/wbc/robot_model.h (CAD/); "bd" = src/wbc/models/bd
+# (CAD_bd/), as //:libwbc_bd.so. Each model has its own HPIPM arena size.
+set(WBC_ROBOT "" CACHE STRING "robot model under src/wbc/models (empty: CAD/)")
+if(WBC_ROBOT)
+  set(WBC_MODEL_DIR ${ROOT}/src/wbc/models/${WBC_ROBOT})
+  if(NOT EXISTS ${WBC_MODEL_DIR}/robot_model.h)
+    message(FATAL_ERROR "no generated model in ${WBC_MODEL_DIR}")
+  endif()
+  target_compile_definitions(wbc_core PUBLIC "WBC_ROBOT_MODEL=\"models/${WBC_ROBOT}/robot_model.h\"")
+  if(WBC_ROBOT STREQUAL "bd")
+    target_compile_definitions(wbc_core PUBLIC "WBC_ARENA_BYTES=(232*1024)")  # as BUILD.bazel
+  endif()
+  # wbc_default_params.h for this model ahead of src/wbc's
+  target_include_directories(wbc_core BEFORE PUBLIC ${WBC_MODEL_DIR})
+endif()
+
 # ---- bare-metal image
 add_executable(wbc_h743.elf
   stm32h743/startup.c

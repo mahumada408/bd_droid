@@ -1,0 +1,22 @@
+{
+  "extreme": {
+    "limits": {"roll_max": 8.0},
+    "why": "CoM 0.21 m above the axle (0.135 m on CAD/) and 4.4 kg: more roll in hard turns. Measured 5.2 deg nominal; limit 1.5x like the CAD/ limits"
+  },
+  "slalom": {
+    "limits": {"roll_max": 3.9},
+    "why": "taller, heavier robot as for extreme. Measured 2.6 deg nominal; limit 1.5x"
+  },
+  "fall_fwd": {
+    "push": [1.0, 1.15, [0, 50.0, 0, 0, 0, 0]],
+    "why": "14 N does not topple a 4.4 kg robot (it recovers up to ~40 N). 50 N is clearly unrecoverable, as the scenario intends"
+  },
+  "fall_back": {
+    "push": [1.0, 1.15, [0, -35.0, 0, 0, 0, 0]],
+    "why": "-12 N does not topple a 4.4 kg robot; -35 N falls promptly"
+  },
+  "fall_trip": {
+    "push": [2.0, 2.3, [0, 0, 0, 7.0, 0, 0]],
+    "why": "3 N m does not trip a 4.4 kg robot; scaled with mass (2.3x)"
+  }
+}

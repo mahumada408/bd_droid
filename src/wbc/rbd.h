@@ -10,7 +10,7 @@
 //   * matrices are row-major; xmat maps body to world coordinates
 #pragma once
 
-#include "robot_model.h"
+#include "robot_model_select.h"
 
 namespace wbc {
 

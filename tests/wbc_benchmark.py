@@ -35,7 +35,9 @@ with --robust 1 --seed <seed printed in the report> --only <scenario>.
   python3 tests/wbc_benchmark.py --robust 20 --perturb sensing --severity 0.5
 """
 import argparse
+import dataclasses
 import importlib
+import json
 import math
 import os
 import sys
@@ -134,6 +136,33 @@ SCENARIOS = [
              expect_fall=True, limits=dict(hit_v=2.5, fall_travel=1.3, fall_wheel_max=5.0)),
 ]
 FALL_POST = 2.0     # s simulated after a fall in expect_fall scenarios
+
+
+def load_overrides(cad_dir, scen):
+    """Per-model scenario overrides from <cad_dir>/bench_overrides.json:
+    {"<scenario>": {"limits": {...}, "push": [t0, t1, [wrench]], "why": "..."}}.
+    The limits and pushes above are calibrated on the original robot (CAD/).
+    The handoff rule applies: override only for a physically different robot,
+    with the reason written down; never to hide a fall."""
+    path = os.path.join(cad_dir, "bench_overrides.json")
+    if not os.path.exists(path):
+        return scen
+    with open(path) as fh:
+        over = json.load(fh)
+    unknown = set(over) - {s.name for s in SCENARIOS}
+    if unknown:
+        raise SystemExit(f"{path}: unknown scenario(s) {sorted(unknown)}")
+    out = []
+    for sc in scen:
+        if sc.name in over:
+            o = over[sc.name]
+            sc = dataclasses.replace(sc, limits={**sc.limits, **o.get("limits", {})},
+                                     push=tuple(o["push"]) if "push" in o else sc.push)
+            what = ", ".join(f"{k}={o[k]}" for k in ("limits", "push") if k in o)
+            print(f"[bench] {sc.name}: {what} from {os.path.basename(os.path.normpath(cad_dir))}/"
+                  f"bench_overrides.json ({o.get('why', 'no reason given')})")
+        out.append(sc)
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -410,7 +439,7 @@ def _worker_init(module, ctor_kw, cad):
 
 def _robust_task(job):
     name, trial, seed, severity, cats = job
-    sc = next(s for s in SCENARIOS if s.name == name)
+    sc = next(s for s in load_overrides(_W["cad"], SCENARIOS) if s.name == name)
     pert = sample_perturbation(seed, severity, cats)
     r = run(sc, _W["WBC"], _W["kw"], _W["cad"], pert)
     return name, trial, seed, r
@@ -483,6 +512,7 @@ def main():
     scen = [s for s in SCENARIOS if not only or s.name in only]
     if only - {s.name for s in scen}:
         ap.error(f"unknown scenario(s): {sorted(only - {s.name for s in scen})}")
+    scen = load_overrides(args.cad, scen)
 
     probe = None
     if hasattr(WBC, "backend") or "backend" in ctor_kw:

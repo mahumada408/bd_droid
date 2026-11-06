@@ -1,3 +1,6 @@
 build/
 build.configure.log
 build.build.log
+build_*/
+build_*.build.log
+build_*.configure.log

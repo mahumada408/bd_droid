@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Cross-compile the whole-body controller for the STM32H743 (NUCLEO-H743ZI2).
 #   embedded/build.sh [build-dir]       (default: embedded/build)
+#   WBC_ROBOT=bd embedded/build.sh embedded/build_bd   # BD droid (CAD_bd/)
 # Needs the Arm GNU toolchain (arm-none-eabi). Set ARM_TOOLCHAIN_DIR if it is
 # not in ~/.local/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD="${1:-$HERE/build}"
 cmake -S "$HERE" -B "$BUILD" -DCMAKE_TOOLCHAIN_FILE="$HERE/cmake/arm-none-eabi.cmake" \
-      -DCMAKE_BUILD_TYPE=Release > "$BUILD.configure.log" 2>&1 || { cat "$BUILD.configure.log"; exit 1; }
+      -DCMAKE_BUILD_TYPE=Release -DWBC_ROBOT="${WBC_ROBOT:-}" > "$BUILD.configure.log" 2>&1 || { cat "$BUILD.configure.log"; exit 1; }
 if ! cmake --build "$BUILD" -j"$(nproc)" > "$BUILD.build.log" 2>&1; then
   grep -E "error|Error" "$BUILD.build.log" | head -40
   echo "build failed; full log: $BUILD.build.log"

@@ -9,7 +9,7 @@
 #include <cmath>
 #include <cstdint>
 
-#include "robot_model.h"
+#include "robot_model_select.h"
 #include "wbc_core.h"
 #include "wbc_default_params.h"
 

@@ -22,7 +22,7 @@ extern "C" {
 }
 
 #include "rbd.h"
-#include "robot_model.h"
+#include "robot_model_select.h"
 #include "wbc_params.h"
 
 #ifndef WBC_ARENA_BYTES

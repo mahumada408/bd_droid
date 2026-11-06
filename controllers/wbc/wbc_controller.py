@@ -799,51 +799,82 @@ class _WbcParams(ctypes.Structure):
  _I_FNR, _I_FNL, _I_PHIOFF, _I_DISTR, _I_DISTL, _I_SAFE, _I_FC) = range(17)
 _I_QDD = _I_FC + 6
 
-_LIB = None
+# One controller library per robot model: libwbc.so is generated from CAD/,
+# libwbc_bd.so from CAD_bd/ (see BUILD.bazel). WholeBodyController uses the
+# first one whose compiled-in model matches the MuJoCo model it is given.
+_LIB_NAMES = ("libwbc.so", "libwbc_bd.so")
+_LIBS = None
 _LIB_ERR = None
 
 
-def _load_lib():
-    global _LIB, _LIB_ERR
-    if _LIB is not None or _LIB_ERR is not None:
-        return _LIB
+def _open_lib(path):
+    """Load one controller library and declare its C API. Returns (lib, error)."""
+    try:
+        lib = ctypes.CDLL(os.path.abspath(path))
+    except OSError as e:
+        return None, f"{path}: {e}"
+    if lib.wbc_params_size() != ctypes.sizeof(_WbcParams):
+        return None, (f"{path}: WbcParams size mismatch (C {lib.wbc_params_size()} vs "
+                      f"Python {ctypes.sizeof(_WbcParams)}); rebuild it")
+    vp, dp, ip = ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_int)
+    lib.wbc_create.restype = vp
+    lib.wbc_create.argtypes = [ctypes.POINTER(_WbcParams), ip]
+    lib.wbc_destroy.argtypes = [vp]
+    lib.wbc_reset.argtypes = [vp]
+    lib.wbc_step.restype = ctypes.c_int
+    lib.wbc_step.argtypes = [vp, vp, vp] + [ctypes.c_double] * 5 + [dp, dp]
+    lib.wbc_model_info.argtypes = [ip, ip, ip, ip, dp]
+    lib.wbc_arena_used.restype = ctypes.c_long
+    lib.wbc_arena_used.argtypes = [vp]
+    lib.wbc_rbd_eval.argtypes = [vp, vp, ctypes.c_int] + [vp] * 7
+    return lib, None
+
+
+def _load_libs():
+    """All loadable controller libraries as (path, lib), WBC_LIB first."""
+    global _LIBS, _LIB_ERR
+    if _LIBS is not None:
+        return _LIBS
     here = os.path.dirname(os.path.abspath(__file__))
-    cands = []
+    groups = []
     if os.environ.get("WBC_LIB"):
-        cands.append(os.environ["WBC_LIB"])
-    if "RUNFILES_DIR" in os.environ:
-        cands.append(os.path.join(os.environ["RUNFILES_DIR"], "_main", "libwbc.so"))
-    cands += [os.path.join(here, "../../libwbc.so"),            # bazel runfiles layout
-              os.path.join(here, "../../bazel-bin/libwbc.so"),  # source tree after `bazel build`
-              "bazel-bin/libwbc.so"]
-    for path in cands:
-        if not os.path.exists(path):
-            continue
-        try:
-            lib = ctypes.CDLL(os.path.abspath(path))
-        except OSError as e:
-            _LIB_ERR = f"{path}: {e}"
-            continue
-        if lib.wbc_params_size() != ctypes.sizeof(_WbcParams):
-            _LIB_ERR = (f"{path}: WbcParams size mismatch (C {lib.wbc_params_size()} vs "
-                        f"Python {ctypes.sizeof(_WbcParams)}); rebuild //:libwbc.so")
-            continue
-        vp, dp, ip = ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_int)
-        lib.wbc_create.restype = vp
-        lib.wbc_create.argtypes = [ctypes.POINTER(_WbcParams), ip]
-        lib.wbc_destroy.argtypes = [vp]
-        lib.wbc_reset.argtypes = [vp]
-        lib.wbc_step.restype = ctypes.c_int
-        lib.wbc_step.argtypes = [vp, vp, vp] + [ctypes.c_double] * 5 + [dp, dp]
-        lib.wbc_model_info.argtypes = [ip, ip, ip, ip, dp]
-        lib.wbc_arena_used.restype = ctypes.c_long
-        lib.wbc_arena_used.argtypes = [vp]
-        lib.wbc_rbd_eval.argtypes = [vp, vp, ctypes.c_int] + [vp] * 7
-        _LIB, _LIB_ERR = lib, None
-        return lib
-    if _LIB_ERR is None:
-        _LIB_ERR = "libwbc.so not found (build it with `bazel build //:libwbc.so`)"
-    return None
+        groups.append([os.environ["WBC_LIB"]])
+    for name in _LIB_NAMES:
+        cands = []
+        if "RUNFILES_DIR" in os.environ:
+            cands.append(os.path.join(os.environ["RUNFILES_DIR"], "_main", name))
+        cands += [os.path.join(here, "../..", name),               # bazel runfiles layout
+                  os.path.join(here, "../../bazel-bin", name),     # source tree after `bazel build`
+                  os.path.join("bazel-bin", name)]
+        groups.append(cands)
+    _LIBS, errs = [], []
+    for cands in groups:
+        for path in cands:
+            if not os.path.exists(path):
+                continue
+            lib, err = _open_lib(path)
+            if lib is None:
+                errs.append(err)
+                continue
+            _LIBS.append((path, lib))
+            break
+    _LIB_ERR = "; ".join(errs) if errs else (
+        None if _LIBS else "libwbc.so not found (build it with `bazel build //:libwbc.so //:libwbc_bd.so`)")
+    return _LIBS
+
+
+def _load_lib():
+    """First available controller library (kept for tools/tests that expect one)."""
+    libs = _load_libs()
+    return libs[0][1] if libs else None
+
+
+def _lib_model(lib):
+    nq, nv_, nu, nb = (ctypes.c_int() for _ in range(4))
+    mass = ctypes.c_double()
+    lib.wbc_model_info(ctypes.byref(nq), ctypes.byref(nv_), ctypes.byref(nu), ctypes.byref(nb),
+                       ctypes.byref(mass))
+    return (nq.value, nv_.value, nu.value, nb.value), mass.value
 
 
 class WholeBodyController(PyWholeBodyController):
@@ -863,28 +894,28 @@ class WholeBodyController(PyWholeBodyController):
         self._h = None
         if backend == "python":
             return
-        lib = _load_lib()
-        if lib is None:
+        libs = _load_libs()
+        if not libs:
             if backend == "cpp":
                 raise RuntimeError(f"C++ WBC unavailable: {_LIB_ERR}")
             print(f"[WBC] C++ backend unavailable ({_LIB_ERR}); using Python/OSQP.")
             return
-        self._lib = lib
-        # The C++ core carries its own copy of the model (src/wbc/robot_model.h);
-        # refuse to run on a model it was not generated from.
-        nq, nv_, nu, nb = (ctypes.c_int() for _ in range(4))
-        mass = ctypes.c_double()
-        lib.wbc_model_info(ctypes.byref(nq), ctypes.byref(nv_), ctypes.byref(nu), ctypes.byref(nb),
-                           ctypes.byref(mass))
-        mismatch = (nq.value, nv_.value, nu.value, nb.value) != (model.nq, model.nv, model.nu, model.nbody) \
-            or abs(mass.value - self.total_mass) > 1e-9
-        if mismatch:
-            msg = ("src/wbc/robot_model.h does not match the MuJoCo model; run "
-                   "`python3 tools/gen_robot_model.py` and rebuild //:libwbc.so")
+        # Each C++ core carries its own copy of a model (src/wbc/robot_model.h,
+        # src/wbc/models/<name>/robot_model.h); use the one generated from this
+        # model and refuse to run on a model none of them was generated from.
+        want = (model.nq, model.nv, model.nu, model.nbody)
+        lib = next((l for _, l in libs
+                    if _lib_model(l)[0] == want and abs(_lib_model(l)[1] - self.total_mass) <= 1e-9), None)
+        if lib is None:
+            msg = ("no controller library matches the MuJoCo model (" + ", ".join(
+                       f"{os.path.basename(p)}: nbody={_lib_model(l)[0][3]} mass={_lib_model(l)[1]:.4f}"
+                       for p, l in libs) + f"; model: nbody={model.nbody} mass={self.total_mass:.4f}). "
+                   "Run tools/gen_robot_model.py for this model and rebuild //:libwbc.so / //:libwbc_bd.so")
             if backend == "cpp":
                 raise RuntimeError(msg)
             print(f"[WBC] {msg}; using Python/OSQP.")
             return
+        self._lib = lib
         self._params = self._make_params()
         err = ctypes.c_int(0)
         self._h = lib.wbc_create(ctypes.byref(self._params), ctypes.byref(err))

@@ -7,7 +7,7 @@
 #include <new>
 
 #include "rbd.h"
-#include "robot_model.h"
+#include "robot_model_select.h"
 #include "wbc_core.h"
 
 using wbc::WbcCore;

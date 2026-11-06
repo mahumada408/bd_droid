@@ -5,8 +5,10 @@ Random poses (including tilted bases) and velocities; compares the mass
 matrix, bias forces, point Jacobian, Jdot*qvel, whole-body CoM and its
 Jacobian. Also fails if src/wbc/robot_model.h is stale.
 
-  python3 tests/wbc_rbd_check.py          # exit 1 on mismatch
+  python3 tests/wbc_rbd_check.py               # exit 1 on mismatch
+  python3 tests/wbc_rbd_check.py --cad CAD_bd  # another robot (its own libwbc_*.so)
 """
+import argparse
 import ctypes
 import os
 import sys
@@ -16,26 +18,29 @@ import mujoco
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, ROOT)
-from controllers.wbc.wbc_controller import _load_lib  # noqa: E402
+from controllers.wbc.wbc_controller import _lib_model, _load_libs  # noqa: E402
 
 TOL = 1e-9   # relative to the largest entry of each quantity
 
 
 def main():
-    lib = _load_lib()
-    if lib is None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cad", default=os.path.join(ROOT, "CAD"))
+    args = ap.parse_args()
+    libs = _load_libs()
+    if not libs:
         import controllers.wbc.wbc_controller as W
         print(f"[rbd] libwbc.so unavailable: {W._LIB_ERR}")
         return 1
-    m = mujoco.MjModel.from_xml_path(os.path.join(ROOT, "CAD", "scene.xml"))
+    m = mujoco.MjModel.from_xml_path(os.path.join(args.cad, "scene.xml"))
     d = mujoco.MjData(m)
-    nq, nv_, nu, nb = (ctypes.c_int() for _ in range(4))
-    mass = ctypes.c_double()
-    lib.wbc_model_info(*(ctypes.byref(x) for x in (nq, nv_, nu, nb, mass)))
-    if (nq.value, nv_.value, nu.value, nb.value) != (m.nq, m.nv, m.nu, m.nbody) or \
-            abs(mass.value - float(np.sum(m.body_mass))) > 1e-9:
-        print("[rbd] FAIL: src/wbc/robot_model.h is stale; run python3 tools/gen_robot_model.py")
+    lib = next((l for _, l in libs if _lib_model(l)[0] == (m.nq, m.nv, m.nu, m.nbody)
+                and abs(_lib_model(l)[1] - float(np.sum(m.body_mass))) <= 1e-9), None)
+    if lib is None:
+        print(f"[rbd] FAIL: no controller library matches {args.cad}/scene.xml (generated model is stale); "
+              "run python3 tools/gen_robot_model.py and rebuild")
         return 1
+    print(f"[rbd] {args.cad}: {m.nbody} bodies, nv={m.nv}")
     nv = m.nv
     P = lambda a: a.ctypes.data_as(ctypes.c_void_p)
     rng = np.random.default_rng(0)

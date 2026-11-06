@@ -10,8 +10,9 @@ in HANDOFF_BD_REDESIGN.md:
   * wheel bodies `wheel` / `wheel_2`, joints right_/left_ hip_roll, hip_pitch, knee, wheel
   * qpos[7:15] / ctrl[0:8] keep the old leg layout; the 3 neck joints come after them
   * every joint is actuated (motor, gear 1); wheel radius 0.05 m
-  * leg joints use `ref` = the old HOME_LEGS values, so the benchmark's hard-coded
-    HOME_LEGS put the robot in the as-designed (CAD) pose
+  * leg bodies are pre-rotated by -HOME_LEGS about their joint axes, so the benchmark's
+    hard-coded HOME_LEGS put the robot in the as-designed (CAD) pose (qpos0 stays 0,
+    as the C++ model generator requires)
   * base origin sits 0.0372 m above the ground plane at home, so the existing
     FLOOR / PLATFORM / wavy start heights stay valid
   * the wheel goes fore-aft under the whole-body CoM (solved here), base level
@@ -193,8 +194,16 @@ def solve_balance():
 
 
 # ---------------------------------------------------------------- XML emission
+def axq(axis, home):
+    """Body quat that pre-rotates by -home about the joint axis, so that qpos = home gives
+    the as-designed (CAD-aligned) pose. Used instead of joint `ref`, which the C++ model
+    generator (tools/gen_robot_model.py) does not support."""
+    c, s_ = math.cos(-home / 2), math.sin(-home / 2)
+    return (c, s_, 0, 0) if axis == "x" else (c, 0, s_, 0)
+
+
 def f(*v):
-    return " ".join(f"{x:.6g}" for x in v)
+    return " ".join(f"{x:.10g}" for x in v)
 
 
 def inertial(b, origin):
@@ -277,8 +286,8 @@ def main():
                  "tibia": "tibia" if s > 0 else "tibia_2", "wheel": "wheel" if s > 0 else "wheel_2"}
         q = HOME_LEGS[0:4] if s > 0 else HOME_LEGS[4:8]
         oh = P(s * 26, -70, RZ)
-        w(f'      <body name="{names["hip"]}" pos="{f(*(oh - o))}">')
-        w(f'        <joint name="{jn}_hip_roll" axis="0 1 0" range="-0.6 0.6" ref="{q[0]}"/>')
+        w(f'      <body name="{names["hip"]}" pos="{f(*(oh - o))}" quat="{f(*axq("y", q[0]))}">')
+        w(f'        <joint name="{jn}_hip_roll" axis="0 1 0" range="-0.6 0.6"/>')
         w('        ' + inertial(B["hip_" + side], oh))
         w('        ' + geom_box("visual", (s * 40, -75.5, (HZ - 24 + RZ + 24) / 2), (27, 4, 46.5), oh, "white"))
         w('        ' + geom_box("visual", (s * 64, -26.75, HZ - 6), (3, 52.75, 18), oh, "white"))
@@ -287,8 +296,8 @@ def main():
         w('        ' + geom_box("collision", (s * 64, -26.75, HZ - 6), (3, 52.75, 18), oh))
         w('        ' + geom_cyl("collision", (s * 67, 0, HZ), (s * 111, 0, HZ), 23, oh))
         of = P(s * 120, 0, HZ)
-        w(f'        <body name="{names["femur"]}" pos="{f(*(of - oh))}">')
-        w(f'          <joint name="{jn}_hip_pitch" axis="1 0 0" range="{q[1] + HIP_RANGE[0]:.6f} {q[1] + HIP_RANGE[1]:.6f}" ref="{q[1]}"/>')
+        w(f'        <body name="{names["femur"]}" pos="{f(*(of - oh))}" quat="{f(*axq("x", q[1]))}">')
+        w(f'          <joint name="{jn}_hip_pitch" axis="1 0 0" range="{q[1] + HIP_RANGE[0]:.6f} {q[1] + HIP_RANGE[1]:.6f}"/>')
         w('          ' + inertial(B["femur_" + side], of))
         w('          ' + link_geom("visual", s * 123, 0, HZ, ky, kz, 26, 9, of, "white"))
         w('          ' + geom_cyl("visual", (s * 114, 0, HZ), (s * 132, 0, HZ), 32, of, "white"))
@@ -300,8 +309,8 @@ def main():
         w('          ' + geom_cyl("collision", (s * 123, 0, HZ), (s * 123, ky, kz), 24, of, kind="capsule"))
         w('          ' + geom_cyl("collision", (s * 132, 0, HZ), (s * 182, 0, HZ), 26, of))
         ot = P(s * 108, ky, kz)
-        w(f'          <body name="{names["tibia"]}" pos="{f(*(ot - of))}">')
-        w(f'            <joint name="{jn}_knee" axis="1 0 0" range="{q[2] + KNEE_RANGE[0]:.6f} {q[2] + KNEE_RANGE[1]:.6f}" ref="{q[2]}"/>')
+        w(f'          <body name="{names["tibia"]}" pos="{f(*(ot - of))}" quat="{f(*axq("x", q[2]))}">')
+        w(f'            <joint name="{jn}_knee" axis="1 0 0" range="{q[2] + KNEE_RANGE[0]:.6f} {q[2] + KNEE_RANGE[1]:.6f}"/>')
         w('            ' + inertial(B["tibia_" + side], ot))
         w('            ' + link_geom("visual", s * 108, ky, kz, e, R, 22, 4, ot, "white"))
         w('            ' + geom_cyl("visual", (s * 104, ky, kz), (s * 112, ky, kz), 22, ot, "white"))

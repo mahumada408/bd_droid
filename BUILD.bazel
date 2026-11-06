@@ -106,6 +106,7 @@ cc_library(
     hdrs = [
         "src/wbc/rbd.h",
         "src/wbc/robot_model.h",
+        "src/wbc/robot_model_select.h",
         "src/wbc/wbc_core.h",
         "src/wbc/wbc_default_params.h",
         "src/wbc/wbc_params.h",
@@ -131,6 +132,52 @@ cc_binary(
     linkshared = True,
     linkopts = ["-Wl,-rpath,/home/manuel/software/acados/lib"],
     deps = [":wbc_core"],
+)
+
+# Same controller compiled for the BD-style droid (CAD_bd/, generated headers in
+# src/wbc/models/bd). controllers/wbc/wbc_controller.py loads whichever library
+# matches the MuJoCo model it is given.
+cc_library(
+    name = "wbc_core_bd",
+    srcs = [
+        "src/wbc/rbd.cpp",
+        "src/wbc/wbc_core.cpp",
+    ],
+    hdrs = [
+        "src/wbc/models/bd/robot_model.h",
+        "src/wbc/models/bd/wbc_default_params.h",
+        "src/wbc/rbd.h",
+        "src/wbc/robot_model.h",
+        "src/wbc/robot_model_select.h",
+        "src/wbc/wbc_core.h",
+        "src/wbc/wbc_default_params.h",
+        "src/wbc/wbc_params.h",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-fPIC",
+        "-Wall",
+    ],
+    defines = [
+        "WBC_ROBOT_MODEL=\\\"models/bd/robot_model.h\\\"",
+        "WBC_ARENA_BYTES=(232*1024)",  # HPIPM workspaces need 207 kB for this model (x86)
+    ],
+    strip_include_prefix = "src/wbc",
+    deps = ["//third_party/acados:acados"],
+)
+
+cc_binary(
+    name = "libwbc_bd.so",
+    srcs = ["src/wbc/wbc_capi.cpp"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+        "-fPIC",
+    ],
+    linkshared = True,
+    linkopts = ["-Wl,-rpath,/home/manuel/software/acados/lib"],
+    deps = [":wbc_core_bd"],
 )
 
 # Bazel test entry point for the whole-body-controller regression benchmark.
