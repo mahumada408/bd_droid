@@ -124,8 +124,15 @@ def main():
     # after them, held at their home pose by the WBC.
     leg_joints = ("right_hip_roll", "right_hip_pitch", "right_knee", "right_wheel",
                   "left_hip_roll", "left_hip_pitch", "left_knee", "left_wheel")
-    if [m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j)] for j in leg_joints] != list(range(7, 15)):
-        raise SystemExit(f"{model_xml}: leg joints must be qpos[7:15] in the order {leg_joints}")
+    # The v2 BD droid has no hip roll: legs at qpos[7:13] (right pitch, knee, wheel; then left).
+    leg_joints_v2 = ("right_hip_pitch", "right_knee", "right_wheel", "left_hip_pitch", "left_knee", "left_wheel")
+    def _adr(names):
+        ids = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j) for j in names]
+        return None if min(ids) < 0 else [m.jnt_qposadr[i] for i in ids]
+    has_roll = _adr(leg_joints) == list(range(7, 15))
+    if not has_roll and _adr(leg_joints_v2) != list(range(7, 13)):
+        raise SystemExit(f"{model_xml}: leg joints must be qpos[7:15] in the order {leg_joints}"
+                         f" or qpos[7:13] in the order {leg_joints_v2}")
     wheel_R_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel")
     wheel_L_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "wheel_2")
     home_qpos = np.array(m.key_qpos[0]) if m.nkey else np.zeros(m.nq)
@@ -137,6 +144,10 @@ def main():
         d.qpos[1] = y_home
         d.qpos[2] = z_start
         d.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+        if not has_roll:            # v2 layout: legs from the keyframe home pose
+            d.qvel[:] = 0.0
+            mujoco.mj_forward(m, d)
+            return
 
         d.qpos[7] = 0.0         # right_hip_roll
         d.qpos[8] = qh_R_nom    # right_hip_pitch
@@ -162,7 +173,7 @@ def main():
     print("    - STEER RIGHT(LEAN):Press 'D' or Right Arrow  (-0.3 rad/s + Active Bank)")
     print("    - BRAKE / STOP:     Press 'X'                 (Locks stationary position)")
     print("  Vertical Posture Controls:")
-    print("    - CROUCH DOWN:      Press 'C'                 (Tap repeatedly to crouch lower, up to -5cm)")
+    print("    - CROUCH DOWN:      Press 'C'                 (Tap repeatedly to crouch lower; BD droid: down to sitting)")
     print("    - STAND TALL:       Press 'T'                 (Tap repeatedly to stand taller)")
     print("    - NOMINAL HEIGHT:   Press 'N'                 (Reset to nominal stance)")
     if orig_robot:
@@ -248,6 +259,11 @@ def main():
 
     qk_target = 0.0
     qk_current = 0.0
+    # Crouch range in posture units (delta_h = 0.10 * qk). Models with a deep posture table and the
+    # sit mode (CAD_bd) go down to their balancing floor and one press further sits on the ground.
+    qk_min, qk_step = -0.55, 0.15
+    if wbc_solver is not None and getattr(wbc_solver, "sit_enable", 0):
+        qk_min, qk_step = (wbc_solver.dh_min - 0.02) / 0.10, 0.25
 
     # Multi-flip state tracking
     target_flips = args.repeat_flips
@@ -284,7 +300,9 @@ def main():
 
     def print_status(action_msg):
         lean_str = " (Deep Bank Left)" if yaw_rate_target > 0.05 else (" (Deep Bank Right)" if yaw_rate_target < -0.05 else "")
-        if qk_target < -0.35:
+        if 0.10 * qk_target < getattr(wbc_solver, "dh_min", -1):
+            posture_str = "Sitting"
+        elif qk_target < -0.35:
             posture_str = f"Deep Crouch ({qk_target:+.2f})"
         elif qk_target < -0.05:
             posture_str = f"Crouch ({qk_target:+.2f})"
@@ -353,10 +371,10 @@ def main():
             yaw_rate_target = 0.0
             print_status("BRAKE / STOP")
         elif keycode in (ord('C'), ord('c')):
-            qk_target = np.clip(qk_target - 0.15, -0.55, 0.20)
-            print_status("Crouch Lower")
+            qk_target = np.clip(qk_target - qk_step, qk_min, 0.20)
+            print_status("Sit (body on the ground)" if 0.10 * qk_target < getattr(wbc_solver, "dh_min", -1) else "Crouch Lower")
         elif keycode in (ord('T'), ord('t')):
-            qk_target = np.clip(qk_target + 0.10, -0.55, 0.20)
+            qk_target = np.clip(qk_target + 0.10, qk_min, 0.20)
             print_status("Stand Taller")
         elif keycode in (ord('N'), ord('n')):
             qk_target = 0.0
@@ -825,7 +843,11 @@ def main():
                             d.ctrl[:] = tau_wbc
                             sf = wbc_info.get("safe_fall", 0)
                             if sf != safe_fall_shown:
-                                if sf:
+                                if sf == 5:
+                                    print(f"\n[SIT] t={d.time:.2f}s sitting on the ground (press T or N to stand up).")
+                                elif safe_fall_shown == 5 and not sf:
+                                    print(f"\n[SIT] t={d.time:.2f}s standing up, balancing.")
+                                elif sf:
                                     cause = {1: "lean", 2: "roll", 3: "tilt", 4: "QP failure"}.get(sf, sf)
                                     print(f"\n[SAFE FALL] t={d.time:.2f}s fall detected ({cause}): wheels braking, "
                                           f"legs tucked. Press Backspace to reset.")

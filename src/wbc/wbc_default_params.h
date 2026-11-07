@@ -90,4 +90,7 @@ static const WbcParams WBC_DEFAULT_PARAMS = {
     /* qp_warm_start */ 2.0,
     /* qp_iter_max */ 40.0,
     /* qp_mu0 */ 100.0,
+    /* sit_enable */ 0.0,
+    /* sit_kp */ 6.0,
+    /* sit_kd */ 0.25,
 };

@@ -160,6 +160,11 @@ class PyWholeBodyController:
     fall_kd_wheel = 0.05  # Nm/(rad/s), wheel brake
     fall_tau_wheel = 1.5  # Nm, wheel brake torque clamp
     fall_recover_T = 1.0  # s upright and still before balancing resumes (0: stay latched)
+    # Sit (models with <custom><numeric name="wbc_sit" data="1"/>): a delta_h command below the
+    # posture table lowers the body onto the ground (legs to the lowest row, wheels braked).
+    sit_enable = 0.0
+    sit_kp = 6.0          # Nm/rad (soft: the body settles level on the ground)
+    sit_kd = 0.25         # Nm s/rad
     # HPIPM (C++ backend). Warm start from the previous tick: 0 cold, 1 primal,
     # 2 primal + dual. Mode 2 averages 2.2 IPM iterations per tick (p99 3,
     # max 13) against 7.8 (p99 12, max 40) cold, with the same torques to
@@ -217,6 +222,10 @@ class PyWholeBodyController:
         # commanded base height (otherwise the posture task fights the height
         # task, and a weak posture task lets the leg nullspace drift).
         self.dh_grid, self.q_grid = self._build_posture_table(model, home)
+        nid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_NUMERIC, "wbc_sit")
+        if nid >= 0:
+            self.sit_enable = float(model.numeric_data[model.numeric_adr[nid]])
+        self.sitting = False
         self.dh_min, self.dh_max = float(self.dh_grid[0]), float(self.dh_grid[-1])
 
         # Wheeled-inverted-pendulum model from the real mass distribution
@@ -281,7 +290,13 @@ class PyWholeBodyController:
         for wid in self.wheel_ids:
             acts = [i for i in self.leg_idx if self._act_chain_has(model, i, wid)]
             legs.append(acts)
-        grid = np.linspace(-0.08, 0.04, 25)
+        # Lowest crouch: per model via <custom><numeric name="wbc_dh_min"/> (default -0.08 m);
+        # grid spacing stays 5 mm (25 rows for the default range).
+        dh_lo = -0.08
+        nid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_NUMERIC, "wbc_dh_min")
+        if nid >= 0:
+            dh_lo = float(model.numeric_data[model.numeric_adr[nid]])
+        grid = np.linspace(dh_lo, 0.04, int(round((0.04 - dh_lo) / 0.005)) + 1)
         qs, ok_dh = [], []
         for dh in grid:
             dk.qpos[:] = home
@@ -599,6 +614,7 @@ class PyWholeBodyController:
         # v*omega spikes on impacts and would kick the roll reference)
         psi_bank = -self.bank_gain * math.atan2(v_target * yaw_target, G)
         psi_ref = min(max(psi_bank + roll_target_offset, -self.max_bank), self.max_bank)
+        sit_cmd = self.sit_enable != 0 and delta_h < self.dh_min - 0.003
         delta_h = min(max(delta_h, self.dh_min), self.dh_max)
         rel_rh = float(rh @ rel)
         h_rel = d.qpos[2] - axle[2]
@@ -623,6 +639,23 @@ class PyWholeBodyController:
                 "safe_fall": self.fall_mode,
                 "qdd": qdd,
             }
+
+        # ---- Sit (see the C++ controller)
+        if sit_cmd:
+            self.sitting = True
+            tau = self.last_tau
+            la = self.leg_idx
+            tau[la] = np.clip(self.sit_kp * (self.q_grid[0][la] - d.qpos[self.act_qpos[la]])
+                              - self.sit_kd * qv[self.act_dof[la]], self.tau_min[la], self.tau_max[la])
+            for a in self.wheel_act:
+                lim = min(self.fall_tau_wheel, -self.tau_min[a], self.tau_max[a])
+                tau[a] = min(max(-self.fall_kd_wheel * qv[self.act_dof[a]], -lim), lim)
+            info = make_info("sit", np.zeros(self.nc), np.zeros(nv))
+            info["safe_fall"] = 5
+            return tau.copy(), info
+        if self.sitting:
+            self.reset()
+            self.sitting = False
 
         # ---- Safe fall (see the C++ controller for the rationale)
         if self.fall_detect and not self.fall_mode:
@@ -773,6 +806,7 @@ _GAIN_FIELDS = (
     "fall_detect", "fall_lean", "fall_roll", "fall_tilt", "fall_T", "fall_qp_T",
     "fall_kp", "fall_kd", "fall_kd_wheel", "fall_tau_wheel", "fall_recover_T",
     "qp_warm_start", "qp_iter_max", "qp_mu0",
+    "sit_enable", "sit_kp", "sit_kd",
 )
 
 

@@ -406,6 +406,7 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
   const double psi_bank = -p.bank_gain * std::atan2(v_target * yaw_target, G);
   const double psi_ref = clampd(psi_bank + roll_off, -p.max_bank, p.max_bank);
   const double dh_lo = p.dh_grid[0], dh_hi = p.dh_grid[p.n_grid - 1];
+  const bool sit_cmd = p.sit_enable != 0 && delta_h < dh_lo - 0.003;
   delta_h = clampd(delta_h, dh_lo, dh_hi);
   const double rel_rh = dot3(rh, rel);
   const double h_rel = qpos[2] - axle[2];
@@ -431,6 +432,35 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
     for (int k = 0; k < NC; ++k) inf[WBC_INFO_FC + k] = ok_ ? x[NV + k] : 0.0;
     for (int j = 0; j < NV; ++j) inf[WBC_INFO_QDD + j] = ok_ ? x[j] : 0.0;
   };
+
+  // ---- Sit: a height command below the posture table lowers the body onto the ground.
+  // The legs go softly to the table's lowest row (a few mm under it the torso rests on the
+  // floor), the wheels are braked and the QP is skipped. Raising the command stands back up.
+  if (sit_cmd) {
+    sitting = true;
+    for (int k = 0; k < n_leg; ++k) {
+      const int a = p.leg_idx[k];
+      const double e = p.q_grid[a] - qpos[p.act_qpos[a]];
+      last_tau[a] = clampd(p.sit_kp * e - p.sit_kd * qv[p.act_dof[a]], p.tau_min[a], p.tau_max[a]);
+    }
+    for (int w = 0; w < 2; ++w) {
+      const int a = p.wheel_act[w];
+      const double lim = std::min(p.fall_tau_wheel, std::min(-p.tau_min[a], p.tau_max[a]));
+      last_tau[a] = clampd(-p.fall_kd_wheel * qv[p.act_dof[a]], -lim, lim);
+    }
+    std::copy(last_tau, last_tau + NU, tau_out);
+    std::memset(x, 0, sizeof(x));
+    have_x_prev = false;
+    if (info) {
+      fill_info(info, 0, 0, false);
+      info[WBC_INFO_SAFE_FALL] = 5;
+    }
+    return 0;
+  }
+  if (sitting) {          // standing up: restart the balance state from the seated pose
+    reset();
+    sitting = false;
+  }
 
   // ---- Safe fall: latch into a protective mode once a fall is unrecoverable
   // (lean error, roll error or base tilt past its limit for fall_T, or the QP

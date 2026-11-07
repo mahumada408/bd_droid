@@ -101,6 +101,7 @@ class WbcCore {
   double pw_int[2] = {0, 0}, tau_dist[2] = {0, 0};
   int n_fail = 0;
   int fall_mode = 0;
+  bool sitting = false;
   double t_fall_cond = 0, t_upright = 0;
   double x_prev[NX] = {0};
   bool have_x_prev = false;

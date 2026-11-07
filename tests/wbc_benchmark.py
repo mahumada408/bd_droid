@@ -115,6 +115,9 @@ SCENARIOS = [
              limits=dict(roll_max=3.0)),
     Scenario("crouch_drive", 6.0, v=step_at(1.0, 0.6), dh=lambda t: -0.04 * min(1.0, t), start=FLOOR,
              limits=dict(v_rmse=0.1)),
+    # deepest balancing crouch the model allows (clamped to its posture table), then drive crouched
+    Scenario("deep_crouch_drive", 10.0, v=step_at(5.0, 0.4), dh=lambda t: -0.160 * min(1.0, t / 4.0),
+             start=FLOOR, limits=dict(pitch_rms=3.5, v_rmse=0.1)),
     Scenario("stand_long", 15.0, start=FLOOR, limits=dict(pitch_rms=0.5, hiproll_max=0.05)),
     Scenario("extreme", 8.0, v=step_at(0.5, 1.5), yaw=step_at(3.0, 1.8), start=FLOOR,
              limits=dict(roll_max=5.0)),
@@ -317,9 +320,14 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
     mujoco.mj_resetData(m, d)
     d.qpos[:3] = sc.start
     d.qpos[3:7] = [math.cos(sc.yaw0 / 2), 0, 0, math.sin(sc.yaw0 / 2)]
-    d.qpos[7:15] = HOME_LEGS
+    if m.nkey:
+        d.qpos[7:] = m.key_qpos[0][7:]               # model's home pose (legs, neck)
+    else:
+        d.qpos[7:15] = HOME_LEGS
     mujoco.mj_forward(m, d)
     c = WBC(m_nom, **ctor_kw)
+    roll_adr = [m.jnt_qposadr[m.joint(j).id] for j in ("right_hip_roll", "left_hip_roll")
+                if mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j) >= 0]   # absent on the v2 BD droid
     dt = m.opt.timestep
     vf = yf = 0.0
     log, ts = [], []
@@ -368,7 +376,7 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
         ts.append(time.perf_counter() - t0)
         d.ctrl[:] = act.apply(tau, d, dt) if act else tau
         mujoco.mj_step(m, d)
-        log.append((t, theta, roll, vfwd, vf, d.qvel[5], yf, d.qpos[7], d.qpos[11],
+        log.append((t, theta, roll, vfwd, vf, d.qvel[5], yf, *(d.qpos[roll_adr] if roll_adr else (0.0, 0.0)),
                     math.remainder(heading - yaw0, 2 * math.pi), d.qpos[0]))
         if hit_t is None:
             for i in range(d.ncon):

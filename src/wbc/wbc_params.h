@@ -59,6 +59,7 @@ typedef struct WbcParams {
   double fall_detect, fall_lean, fall_roll, fall_tilt, fall_T, fall_qp_T;
   double fall_kp, fall_kd, fall_kd_wheel, fall_tau_wheel, fall_recover_T;
   double qp_warm_start, qp_iter_max, qp_mu0;   // HPIPM: 0 cold / 1 primal / 2 primal+dual
+  double sit_enable, sit_kp, sit_kd;   // sit: delta_h below the posture table -> legs to its lowest row, wheels braked
 } WbcParams;
 
 // Layout of the info vector filled by wbc_step()

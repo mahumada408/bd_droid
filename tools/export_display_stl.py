@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Export a one-piece, scaled display model of the BD droid (CAD/bd_droid_rs05.fs) as a binary STL.
 
-This rebuilds the visible outer shape from the same dimensions as the FeatureScript, without the
-internals (belts, pulleys, bearings, electronics) or screw holes, and joins everything with a base
+This rebuilds the visible outer shape of the v3 gimbal-hip design from the same dimensions as the
+FeatureScript, without the internals (bearings, electronics) or screw holes, and joins everything with a base
 plate into one solid that prints without assembly. Antenna rods are thickened so they survive the
 scale-down.
 
     python3 tools/export_display_stl.py                      # 1:3 -> CAD/print/bd_droid_1to3.stl
     python3 tools/export_display_stl.py --scale 4            # 1:4
-    python3 tools/export_display_stl.py --hip 120            # crouched pose (hip axis height, mm, 52..255)
+    python3 tools/export_display_stl.py --hip 120            # crouched pose (hip axis height, mm, 33..255; 33 = sitting on the torso)
 
 Needs: pip install manifold3d numpy
 """
@@ -18,7 +18,7 @@ import os
 import struct
 
 import numpy as np
-from manifold3d import Manifold, OpType
+from manifold3d import CrossSection, Manifold, OpType
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SEG = 64
@@ -83,38 +83,45 @@ def rs05(rear, s, y, z):
 # ---------------------------------------------------------------- robot
 
 TXN, TYB, TYF = 60.0, -70.0, 88.0
-KNEE_D = 49.343
+RX, HY, HD = 32.0, 10.0, 33.0  # hip point |x|, y; hip axis height above the torso bottom
+WC, TW = 105.5, 24.5          # tyre centre |x|, half width
+
+
+def crowned_tyre(s, R, r_in=35.0, crown=14.0, seg=SEG):
+    """Tyre with rounded shoulders (FeatureScript: 14 mm fillets), axis along x, centred at x = s * WC."""
+    pts = [(r_in, -TW), (R - crown, -TW)]
+    for k in range(1, 12):
+        a = -math.pi / 2 + k * (math.pi / 2) / 12
+        pts.append((R - crown + crown * math.cos(a), -TW + crown + crown * math.sin(a)))
+    pts += [(R, -TW + crown), (R, TW - crown)]
+    for k in range(1, 12):
+        a = k * (math.pi / 2) / 12
+        pts.append((R - crown + crown * math.cos(a), TW - crown + crown * math.sin(a)))
+    pts += [(R - crown, TW), (r_in, TW)]
+    t = Manifold.revolve(CrossSection([pts]), seg)                # axis z, radius in x
+    return t.rotate([0, 90, 0]).translate([s * WC, 0, R])
 
 
 def leg(s, hz, R, ky, kz):
+    """ky: knee y relative to the hip."""
     P = []
-    rz = hz + 45
-    yw = TYB
-    yp0 = yw - 9.5
-    # hip yoke (plate behind the rear wall + arm along the hip-pitch motor), pad onto the roll output
-    P.append(box(s * 13, s * 67.5, yp0, yw - 1.5, hz - 24, rz + 24))
-    P.append(box(s * 61, s * 67.5, yp0, 26, hz - 24, hz + 12))
-    P.append(cyl((s * 26, yw - 1.5, rz), (s * 26, yw + 0.5, rz), 13))
-    P.append(rs05(s * 67, s, 0, hz))                                       # hip pitch
-    L = math.hypot(ky, kz - hz)
-    uy, uz = ky / L, (kz - hz) / L
-    my, mz = KNEE_D * uy, hz + KNEE_D * uz
-    P.append(rs05(s * 70, s, my, mz))                                      # knee motor, inboard
-    P.append(hull_yz(s * 113.5, s * 156, 0, hz, 30, ky, kz, 38))             # thigh + cover (solid)
-    P.append(cyl((s * 155.5, my, mz), (s * 156.6, my, mz), 14))              # drive-shaft bearing carrier
-    P.append(cyl((s * 155.5, ky, kz), (s * 158.5, ky, kz), 15))                # knee hub boss
-    P.append(link(s * 158, s * 166, ky, kz, 0, R, 22, 28))                 # shin
-    P.append(strip(s * 165.5, s * 167, 0, R, ky, kz, 10, 30, 70))            # shin stripe
-    P.append(cyl((s * 165.5, ky, kz), (s * 169, ky, kz), 20))                # knee cap
-    P.append(rs05(s * 165.5, s, 0, R))                                       # wheel motor
-    wc = s * 195
-    P.append(cyl((s * 212, 0, R), (s * 217, 0, R), 34))                    # hub disc
-    P.append(cyl((wc - s * 18, 0, R), (wc + s * 18, 0, R), 35))            # rim (solid)
-    P.append(cyl((s * 216.5, 0, R), (s * 221, 0, R), 13))                    # hub cap
-    tyre = cyl((wc - s * 18, 0, R), (wc + s * 18, 0, R), R)
-    grooves = [box(wc - 14, wc + 14, -2.5, 2.5, 2 * R - 2.5, 2 * R + 1)
-               .translate([0, 0, -R]).rotate([k * 18 + 9, 0, 0]).translate([0, 0, R]) for k in range(20)]
-    P.append(tyre - union(grooves))
+    ky = HY + ky
+    P.append(cyl((s * RX, -67, hz), (s * RX, -20, hz), 23))                 # hip-roll motor (inside the torso)
+    P.append(box(s * 10, s * 60.5, -18, 38, hz - 23, hz + 23))             # gimbal (closed for display)
+    P.append(cyl((s * 58, HY, hz), (s * 61.5, HY, hz), 15))                # hip-pitch output boss
+    P.append(hull_yz(s * 61, s * 70, HY, hz, 26, ky, kz, 27))              # thigh plate (cap inlay flush)
+    P.append(rs05(s * 17, s, ky, kz))                                      # knee motor, inner side of the thigh
+    P.append(cyl((s * 63.5, ky, kz), (s * 71.5, ky, kz), 16))              # shin hub through the thigh bore
+    P.append(link(s * 71, s * 79, ky, kz, HY, R, 17, 26))                  # shin
+    P.append(strip(s * 78.5, s * 80, HY, R, ky, kz, 8, 32, 72))            # shin stripe
+    P.append(cyl((s * 78.5, ky, kz), (s * 82, ky, kz), 17))                # knee cap
+    P.append(rs05(s * 78.5, s, HY, R))                                     # wheel motor
+    P.append(cyl((s * 125.5, HY, R), (s * 130, HY, R), 34))                # hub disc
+    P.append(cyl((s * (WC - TW), HY, R), (s * (WC + TW), HY, R), 35.5))    # rim (solid)
+    P.append(cyl((s * 129.5, HY, R), (s * 130.5, HY, R), 13))              # flush hub cap
+    grooves = [box(s * WC - 12, s * WC + 12, HY - 2.5, HY + 2.5, 2 * R - 2, 2 * R + 1)
+               .translate([0, -HY, -R]).rotate([k * 18 + 9, 0, 0]).translate([0, HY, R]) for k in range(20)]
+    P.append(crowned_tyre(s, R).translate([0, HY, 0]) - union(grooves))
     return P
 
 
@@ -124,18 +131,22 @@ def robot(hz=210.0, R=50.0, ant_r=2.5):
     ky = math.sqrt(105 ** 2 - half ** 2)
     P = leg(1, hz, R, ky, kz) + leg(-1, hz, R, ky, kz)
 
-    # torso (solid display shell) with the XGT battery end recessed in the rear opening
-    tz0 = hz + 18
-    zB = hz + 79
+    # torso (solid display shell): rounded front-bottom edge, hip sockets, XGT battery end in the rear opening
+    tz0 = hz - HD
+    zB = hz + 42
     zD = zB + 65
-    tz1 = zD + 15
+    tz1 = zD + 22
     torso = rbox_z(-TXN, TXN, TYB, TYF, tz0, tz1 + 4, 8)
+    r = 30.0
+    torso = torso - (box(-TXN - 1, TXN + 1, TYF - r, TYF + 1, tz0 - 1, tz0 + r)
+                     - cyl((-TXN - 2, TYF - r, tz0 + r), (TXN + 2, TYF - r, tz0 + r), r))
+    torso = torso - union([box(s * 48, s * (TXN + 1), -19, 39, tz0 - 1, hz + 38) for s in (1, -1)])
     frame = box(-40, 40, TYB - 1, TYB + 1.5, zB - 1, zD + 1) - box(-38.5, 38.5, TYB - 2, TYB + 2, zB, zD)
     torso = torso - frame                                                   # groove around the battery end
     P.append(torso)
     P.append(box(-12, 12, TYB - 1, TYB + 0.5, zB + 30, zB + 44))           # XGT release button
     # chest details
-    cz = hz + 100
+    cz = hz + 70
     chest = box(-26, 26, TYF - 0.5, TYF + 4, cz - 27, cz + 27)
     chest = chest - union([box(-16, 16, TYF + 2, TYF + 5, cz - 18 + k * 8, cz - 14 + k * 8) for k in range(4)])
     P += [chest, box(-6, 6, TYF + 3, TYF + 6, cz + 18, cz + 24), box(-12, 12, TYF - 0.5, TYF + 2, cz + 33, tz1 - 5),
@@ -191,8 +202,8 @@ def robot(hz=210.0, R=50.0, ant_r=2.5):
 def base_plate(R=50.0, sink=2.0, t=6.0):
     """Display base under the wheels; the tyres sink 'sink' mm into it so the print is one piece.
     A pad under each tyre fills the tread grooves at the contact patch (no trapped voids)."""
-    pads = [box(s * 177, s * 213, -14, 14, 0, sink + 2) for s in (1, -1)]
-    return union([rbox_z(-232, 232, -85, 100, -t + sink, sink, 20)] + pads)
+    pads = [box(s * (WC - 12), s * (WC + 12), HY - 14, HY + 14, 0, sink + 2) for s in (1, -1)]
+    return union([rbox_z(-150, 150, -85, 100, -t + sink, sink, 20)] + pads)
 
 
 def write_stl(m, path):
