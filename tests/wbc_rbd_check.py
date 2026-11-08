@@ -2,8 +2,9 @@
 """Check the C++ core's standalone dynamics (src/wbc/rbd.cpp) against MuJoCo.
 
 Random poses (including tilted bases) and velocities; compares the mass
-matrix, bias forces, point Jacobian, Jdot*qvel, whole-body CoM and its
-Jacobian. Also fails if src/wbc/robot_model.h is stale.
+matrix, bias forces, point Jacobian, Jdot*qvel, whole-body CoM, its
+Jacobian and bias acceleration, and body angular velocity. Also fails if
+src/wbc/robot_model.h is stale.
 
   python3 tests/wbc_rbd_check.py               # exit 1 on mismatch
   python3 tests/wbc_rbd_check.py --cad CAD_bd  # another robot (its own libwbc_*.so)
@@ -65,8 +66,18 @@ def main():
         mujoco.mj_jac(m, d, Jr, None, pt, b)
         mujoco.mj_jacDot(m, d, Jdr, None, pt, b)
         mujoco.mj_jacSubtreeCom(m, d, Jcr, 1)
+        cb, om = np.zeros(3), np.zeros(3)
+        lib.wbc_rbd_eval2(P(q), P(qd), b, P(cb), P(om))
+        cbr, jdb = np.zeros(3), np.zeros((3, nv))
+        for bb in range(1, m.nbody):
+            mujoco.mj_jacDot(m, d, jdb, None, d.xipos[bb], bb)
+            cbr += m.body_mass[bb] * (jdb @ d.qvel)
+        cbr /= m.body_mass[1:].sum()
+        v6 = np.zeros(6)
+        mujoco.mj_objectVelocity(m, d, mujoco.mjtObj.mjOBJ_BODY, b, v6, 0)
         ref = {"mass matrix": (M, Mr), "bias forces": (h, d.qfrc_bias), "point Jacobian": (J, Jr),
-               "Jdot*qvel": (jd, Jdr @ d.qvel), "CoM": (com, d.subtree_com[1]), "CoM Jacobian": (Jcom, Jcr)}
+               "Jdot*qvel": (jd, Jdr @ d.qvel), "CoM": (com, d.subtree_com[1]), "CoM Jacobian": (Jcom, Jcr),
+               "CoM bias acc": (cb, cbr), "body omega": (om, v6[:3])}
         for k, (a, r) in ref.items():
             e = np.abs(a - r).max() / max(1e-9, np.abs(r).max())
             worst[k] = max(worst.get(k, 0.0), e)

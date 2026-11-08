@@ -144,6 +144,8 @@ void WbcCore::reset() {
   fall_mode = 0;
   t_fall_cond = t_upright = 0;
   have_x_prev = false;
+  psi_f = a_lat_f = 0;
+  have_hub_h = false;
   for (double& t : last_tau) t = 0.0;
 }
 
@@ -170,6 +172,7 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
   const double roll = std::atan2(-R[6], R[8]);
   const double yaw = std::atan2(fh[1], fh[0]);
   const double wx = qv[3], wy = qv[4], wz = qv[5];
+  const double wz_w = R[6] * wx + R[7] * wy + R[8] * wz;      // turn rate about world z
 
   // ---- Wheel hubs / axle
   const int wid[2] = {p.wheel_body[0], p.wheel_body[1]};
@@ -184,34 +187,90 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
   matvec3(J_ax, qv, v_ax, NV);
   const double v_fwd = dot3(fh, v_ax);
 
+  // ---- Bank (lean-led turning). A coordinated lean psi = -atan(a/g) puts the
+  // resultant of gravity and the centripetal force through the middle of the
+  // track, so both wheels stay equally loaded however hard the turn. The lean
+  // leads: the bank reference heads straight for the lean the commanded turn
+  // needs, while the turn itself is only allowed as much lateral acceleration
+  // as the lean actually reached supports (g tan(lean) + lean_band). The bank is
+  // also kept within lean_band of the measured lateral acceleration, so the
+  // robot never leans further than its track can hold before the turn builds.
   // Turn-rate limiter: |v * omega| <= a_lat_max, using the larger of commanded
   // and actual speed so an overspeeding robot cannot turn harder than intended.
-  const double w_cap = p.a_lat_max / std::max(std::max(std::fabs(v_target), std::fabs(v_fwd)), 1e-3);
+  const double v_big = std::max(std::max(std::fabs(v_target), std::fabs(v_fwd)), 1e-3);
+  const double w_cap = p.a_lat_max / v_big;
   yaw_target = clampd(yaw_target, -w_cap, w_cap);
+  const double v_sg = std::fabs(v_target) >= std::fabs(v_fwd) ? v_target : v_fwd;
+  const double a_cmd = v_sg * yaw_target;                     // + = turning left (lean left: roll < 0)
+  a_lat_f += std::min(1.0, dt / std::max(p.lean_T, dt)) * (v_fwd * wz_w - a_lat_f);
+  {
+    double psi_des = -std::atan(p.bank_gain * a_cmd / G);
+    if (p.lean_band > 0) {
+      const double lo = -std::atan((a_lat_f + p.lean_band) / G), hi = -std::atan((a_lat_f - p.lean_band) / G);
+      psi_des = clampd(psi_des, lo, hi);
+    }
+    psi_des = clampd(psi_des, -p.max_bank, p.max_bank);
+    const double step = p.lean_rate > 0 ? p.lean_rate * dt : 1e9;
+    psi_f += clampd(psi_des - psi_f, -step, step);
+  }
+  // The turn follows the lean actually reached, both ways: lateral acceleration within lean_band
+  // of g tan(lean). Into a turn this caps it until the lean has built; out of one (or through a
+  // reversal) the robot keeps turning while it is still leaned, like a motorcycle, so the lean
+  // is never left unsupported (above ~0.3 m/s, where a turn can hold it).
+  if (p.lean_lead != 0 && p.lean_band > 0) {
+    const double a_lean = -G * std::tan(clampd(roll, -p.max_bank, p.max_bank));   // + = left
+    double a_lo = a_lean - p.lean_band, a_hi = a_lean + p.lean_band;
+    if (std::fabs(v_sg) < 0.3) {         // too slow to hold a lean by turning: only cap
+      a_lo = std::min(a_lo, 0.0);
+      a_hi = std::max(a_hi, 0.0);
+    }
+    if (std::fabs(v_sg) > 1e-3) {
+      const double a_now = clampd(v_sg * yaw_target, a_lo, a_hi);
+      yaw_target = clampd(a_now / v_sg, -w_cap, w_cap);
+    }
+  }
 
-  // ---- Wheel contact geometry: flat ground (normal +z) under a thin disk.
-  // The contact point is the rim point closest to the ground: the hub minus
-  // r times the unit vector along the projection of +z onto the wheel plane.
-  double nrm_w[2][3], bk[NC];
+  // ---- Wheel contact geometry: flat ground (normal +z) under a crowned tyre,
+  // an ellipsoid with radius r in the wheel plane and half width c along the
+  // axle a (c = 0: thin disk). The contact point is its support point in -z:
+  // hub - E^2 z / sqrt(z^T E^2 z) with E^2 = r^2 I + (c^2 - r^2) a a^T, which
+  // walks out towards the tyre shoulder as the wheel cambers in a lean. The hub
+  // height over the contact, sqrt(r^2 + (c^2 - r^2) a_z^2), changes with camber
+  // too; its rate feeds the normal row.
+  double nrm_w[2][3], bk[NC], hub_hd[2];
   std::memset(Jc, 0, sizeof(Jc));
   std::memset(Jk, 0, sizeof(Jk));
   for (int w = 0; w < 2; ++w) {
     const double* a = rbd.axis(wid[w]);
     const double* hub = rbd.xpos(wid[w]);
     const double nrm[3] = {0.0, 0.0, 1.0};
-    double u[3] = {-a[2] * a[0], -a[2] * a[1], 1.0 - a[2] * a[2]};
-    double un = std::sqrt(dot3(u, u));
-    if (un < 1e-6) {          // wheel lying flat: no meaningful rim point
-      u[0] = u[1] = 0.0;
-      u[2] = 1.0;
-      un = 1.0;
+    const double r2 = p.wheel_radius * p.wheel_radius, c2 = p.wheel_crown * p.wheel_crown;
+    double e2z[3] = {(c2 - r2) * a[2] * a[0], (c2 - r2) * a[2] * a[1], r2 + (c2 - r2) * a[2] * a[2]};
+    double hh = std::sqrt(std::max(e2z[2], 0.0));
+    if (hh < 1e-6) {          // thin disk lying flat: no meaningful rim point
+      e2z[0] = e2z[1] = 0.0;
+      e2z[2] = r2;
+      hh = p.wheel_radius;
     }
     double pt[3];
-    for (int k = 0; k < 3; ++k) pt[k] = hub[k] - p.wheel_radius * u[k] / un;
+    for (int k = 0; k < 3; ++k) pt[k] = hub[k] - e2z[k] / hh;
+    hub_hd[w] = have_hub_h ? (hh - hub_h_prev[w]) / dt : 0.0;
+    hub_h_prev[w] = hh;
     std::copy(nrm, nrm + 3, nrm_w[w]);
     double Jdw[3], vc[3], vh[3];
     point_jac(wid[w], pt, Jw, Jdw);
     std::copy(Jw, Jw + 3 * NV, Jc + 3 * w * NV);
+    // Rolling without slip keeps the velocity of the material point AT the contact zero, but
+    // the contact travels over the tyre (at the ground speed pc_dot), so the condition on the
+    // fixed material point is J qdd + Jdot qv + omega x pc_dot = 0. For an upright disk that
+    // extra term is purely normal; on a cambered tyre it has a lateral part (v^2/r sin camber).
+    matvec3(Jhub[w], qv, vh, NV);
+    {
+      const double pcd[3] = {vh[0], vh[1], 0.0};
+      double wxp[3];
+      cross3(rbd.omega(wid[w]), pcd, wxp);
+      for (int k = 0; k < 3; ++k) Jdw[k] += wxp[k];
+    }
     double t1[3], t2[3];
     cross3(nrm, fh, t1);
     double n1 = std::sqrt(dot3(t1, t1));
@@ -219,7 +278,6 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
     for (int k = 0; k < 3; ++k) t1[k] /= n1;
     cross3(t1, nrm, t2);
     matvec3(Jw, qv, vc, NV);
-    matvec3(Jhub[w], qv, vh, NV);
     const double* tm[2] = {t1, t2};
     for (int r = 0; r < 2; ++r) {
       double* row = &Jk[(3 * w + r) * NV];
@@ -229,8 +287,9 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
     double* row = &Jk[(3 * w + 2) * NV];
     for (int j = 0; j < NV; ++j)
       row[j] = nrm[0] * Jhub[w][j] + nrm[1] * Jhub[w][NV + j] + nrm[2] * Jhub[w][2 * NV + j];
-    bk[3 * w + 2] = -(dot3(nrm, Jd_hub[w]) + p.kv_slip * dot3(nrm, vh));
+    bk[3 * w + 2] = -(dot3(nrm, Jd_hub[w]) + p.kv_slip * (dot3(nrm, vh) - hub_hd[w]));
   }
+  have_hub_h = true;
 
   // ---- Wheel load estimate. Generalized-momentum observer on the 6
   // floating-base rows: r -> tau_ext,b = Jc_b^T F (no actuator torque or joint
@@ -354,6 +413,11 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
     rel[k] = rbd.com()[k] - axle[k];
     rel_v[k] = vcom[k] - v_ax[k];
   }
+  // Relative velocity seen in the heading frame, which turns at wz_w: banked into a turn the CoM
+  // sits inside the axle, and the frame rotation alone would read as a fore-aft CoM velocity
+  // (wz * lateral offset, ~1 rad/s of false lean rate in a hard turn).
+  rel_v[0] += wz_w * rel[1];
+  rel_v[1] -= wz_w * rel[0];
   const double rf = dot3(fh, rel), rz = rel[2];
   const double phi = std::atan2(rf, rz);
   const double phid = (dot3(fh, rel_v) * rz - rf * rel_v[2]) / std::max(rf * rf + rz * rz, 1e-6);
@@ -403,11 +467,18 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
   const double yaw_rate_ref = yaw_target - p.kp_heading * e_head;
 
   // ---- Task references
-  const double psi_bank = -p.bank_gain * std::atan2(v_target * yaw_target, G);
-  const double psi_ref = clampd(psi_bank + roll_off, -p.max_bank, p.max_bank);
+  const double psi_ref = clampd(psi_f + roll_off, -p.max_bank, p.max_bank);
   const double dh_lo = p.dh_grid[0], dh_hi = p.dh_grid[p.n_grid - 1];
   const bool sit_cmd = p.sit_enable != 0 && delta_h < dh_lo - 0.003;
+  // Banked, the outer leg reaches half_track * sin(bank) further down: crouch so it has the room
+  // (the legs are near full extension at the nominal height), plus a little more for style.
+  const double s_bank = std::sin(std::fabs(psi_f));
+  delta_h = std::min(delta_h, dh_hi - p.lean_room * std::min(1.0, 8.0 * s_bank) - p.half_track * s_bank) -
+            p.lean_crouch * std::fabs(psi_f);
   delta_h = clampd(delta_h, dh_lo, dh_hi);
+  // Rate references in the base frame: a turn at yaw_rate_ref about world z while banked shows up
+  // partly on the base pitch axis, so the pitch and yaw rate tasks track that instead of zero.
+  const double wb_ref[3] = {yaw_rate_ref * R[6], yaw_rate_ref * R[7], yaw_rate_ref * R[8]};
   const double rel_rh = dot3(rh, rel);
   const double h_rel = qpos[2] - axle[2];
   const double hd_rel = qv[2] - v_ax[2];
@@ -429,6 +500,9 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
     inf[WBC_INFO_DIST_R] = tau_dist[0];
     inf[WBC_INFO_DIST_L] = tau_dist[1];
     inf[WBC_INFO_SAFE_FALL] = fall_mode;
+    inf[WBC_INFO_A_LAT] = a_lat_f;
+    inf[WBC_INFO_DH_EFF] = delta_h;
+    inf[WBC_INFO_V_FWD] = v_fwd;
     for (int k = 0; k < NC; ++k) inf[WBC_INFO_FC + k] = ok_ ? x[NV + k] : 0.0;
     for (int j = 0; j < NV; ++j) inf[WBC_INFO_QDD + j] = ok_ ? x[j] : 0.0;
   };
@@ -515,22 +589,27 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
     wT[6] = p.w_axle;
   }
   JT[7 * NV + 3] = 1.0;
-  bT[7] = -p.kp_pitch * theta - p.kd_pitch * wx;
+  bT[7] = -p.kp_pitch * theta - p.kd_pitch * (wx - wb_ref[0]);
   wT[7] = p.w_pitch;
   JT[8 * NV + 4] = 1.0;
-  bT[8] = -p.kp_roll * (roll - psi_ref) - p.kd_roll * wy;
+  bT[8] = -p.kp_roll * (roll - psi_ref) - p.kd_roll * (wy - wb_ref[1]);
   wT[8] = p.w_roll;
   JT[9 * NV + 5] = 1.0;
-  bT[9] = p.kp_yaw * (yaw_rate_ref - wz);
+  bT[9] = p.kp_yaw * (wb_ref[2] - wz);
   wT[9] = p.w_yaw;
   for (int j = 0; j < NV; ++j) JT[10 * NV + j] = -J_ax[2 * NV + j];
   JT[10 * NV + 2] += 1.0;
-  bT[10] = p.kp_h * (p.h_rel_nom + delta_h - h_rel) - p.kd_h * hd_rel + Jd_ax[2];
+  // The height offset is set along the body's up axis: banked, its vertical part shrinks by
+  // cos(bank) (otherwise the height task pulls the base down and the legs splay to give it).
+  bT[10] = p.kp_h * ((p.h_rel_nom + delta_h) * std::cos(psi_ref) - h_rel) - p.kd_h * hd_rel + Jd_ax[2];
   wT[10] = p.w_height;
   for (int j = 0; j < NV; ++j)
     JT[11 * NV + j] = rh[0] * (Jcom[j] - J_ax[j]) + rh[1] * (Jcom[NV + j] - J_ax[NV + j]);
+  // The row is rh.(Jcom - J_ax) qdd = desired relative acceleration - rh.(Jcom_dot - J_ax_dot) qv,
+  // and holding the offset in the turning heading frame takes its centripetal and Coriolis terms.
   bT[11] = p.kp_lat * (p.y_lat_nom + rz * std::tan(psi_ref) - rel_rh) - p.kd_lat * dot3(rh, rel_v) -
-           dot3(rh, Jd_ax);
+           wz_w * wz_w * rel_rh + 2.0 * wz_w * (rh[1] * rel_v[0] - rh[0] * rel_v[1]) -
+           dot3(rh, rbd.com_bias()) + dot3(rh, Jd_ax);
   wT[11] = p.w_lat;
 
   // ---- Cost: P (NX x NX, full symmetric), q
@@ -548,14 +627,28 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
       q[i] -= wi * bT[t];
     }
   }
-  // Posture from the leg-IK table
-  int gi = 0;
-  while (gi < p.n_grid - 2 && p.dh_grid[gi + 1] < delta_h) ++gi;
-  const double gf = (delta_h - p.dh_grid[gi]) / (p.dh_grid[gi + 1] - p.dh_grid[gi]);
+  // Posture from the leg-IK table.
+  // Banked (on flat ground): inner leg shorter, outer leg longer, by half_track * tan(bank) each,
+  // so both hubs sit at the same height. From the bank reference, not the measured roll: that
+  // would close a positive-feedback loop (more roll, shorter leg, more roll).
+  double gf_side[3];
+  int gi_side[3];
+  for (int sd = -1; sd <= 1; ++sd) {
+    const double dhs = clampd(delta_h - sd * p.half_track * std::tan(psi_ref), dh_lo, dh_hi);
+    int g = 0;
+    while (g < p.n_grid - 2 && p.dh_grid[g + 1] < dhs) ++g;
+    gi_side[sd + 1] = g;
+    gf_side[sd + 1] = (dhs - p.dh_grid[g]) / (p.dh_grid[g + 1] - p.dh_grid[g]);
+  }
   for (int k = 0; k < n_leg; ++k) {
     const int a = p.leg_idx[k];
     const int dof = p.act_dof[a];
-    const double qref = (1.0 - gf) * p.q_grid[gi * NU + a] + gf * p.q_grid[(gi + 1) * NU + a];
+    const int sd = p.leg_side[k] > 0 ? 2 : (p.leg_side[k] < 0 ? 0 : 1);
+    const int g = gi_side[sd];
+    const double f = gf_side[sd];
+    double qref = (1.0 - f) * p.q_grid[g * NU + a] + f * p.q_grid[(g + 1) * NU + a];
+    if (k == p.neck_k[0]) qref += clampd(p.neck_look * yaw_rate_ref, -p.neck_look_max, p.neck_look_max);
+    if (k == p.neck_k[1]) qref -= p.neck_level * roll;
     const double a_post = p.kp_post * (qref - qpos[p.act_qpos[a]]) - p.kd_post * qv[dof];
     const double wp = p.is_roll[k] ? p.w_post_roll : p.w_post;
     P[dof * NX + dof] += wp;
@@ -626,7 +719,9 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
       ug[a] = BIG;
     }
     for (int k = 0; k < 4; ++k) ug[NU + 4 * w + k] = in_contact[w] ? 0.0 : BIG;
-    lb[n_leg + w] = in_contact[w] ? 0.0 : -1.0;
+    // Both wheels down: keep fz_min on each, so hard lean-ins and turns trade a little tracking
+    // for not lifting the inner wheel.
+    lb[n_leg + w] = in_contact[w] ? (n_on == 2 ? p.fz_min : 0.0) : -1.0;
     ub[n_leg + w] = in_contact[w] ? p.Fz_max : 1.0;
   }
   // Joint limits: keep q + qd*T + 0.5*qdd*T^2 inside [lo, hi]
@@ -692,6 +787,14 @@ int WbcCore::step(const double* qpos, const double* qv, double v_target, double 
       double t = btau[a];
       for (int j = 0; j < NX; ++j) t += Atau[a * NX + j] * x[j];
       t += p.fric[a] * std::tanh(qv[p.act_dof[a]] / p.fric_vel);
+      // Leg joints: dry friction (~0.1 Nm) is larger than the small corrective torques the
+      // posture and balance tasks ask for, so uncompensated it freezes the leg nullspace (in hard
+      // turns the hips then splay to their limits). The feed-forward follows the motion the QP
+      // asks for (qd + qdd T), not the measured velocity alone, which would be negative damping.
+      if (p.fric_leg[a] != 0.0) {
+        const int dof = p.act_dof[a];
+        t += p.leg_fric_comp * p.fric_leg[a] * std::tanh((qv[dof] + x[dof] * p.leg_fric_T) / p.fric_vel);
+      }
       if (p.dist_comp != 0) {
         if (a == p.wheel_act[0]) t -= tau_dist[0];
         if (a == p.wheel_act[1]) t -= tau_dist[1];

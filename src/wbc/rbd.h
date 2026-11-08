@@ -36,11 +36,14 @@ class Rbd {
   // Whole-robot CoM, its Jacobian (3 x NV) and velocity.
   const double* com() const { return com_; }
   const double* com_jac() const { return Jcom_; }
+  // Jcom_dot * qvel: the CoM's acceleration at qacc = 0 (centripetal / Coriolis)
+  const double* com_bias() const { return comd_; }
 
   // Body frames (world)
   const double* xpos(int b) const { return xpos_[b]; }
   const double* xmat(int b) const { return xmat_[b]; }
   const double* axis(int b) const { return axis_[b]; }   // hinge axis, world
+  const double* omega(int b) const { return w_[b]; }     // angular velocity, world
 
  private:
   const double* qvel_ = nullptr;
@@ -49,7 +52,7 @@ class Rbd {
   double w_[NB][3], v_[NB][3];        // angular velocity, origin linear velocity (world)
   double alpha_[NB][3], acc_[NB][3];  // bias angular / origin linear acceleration
   double Jc_[NB][3 * NV], Jr_[NB][3 * NV];   // CoM translational / rotational Jacobians
-  double com_[3], Jcom_[3 * NV];
+  double com_[3], Jcom_[3 * NV], comd_[3];
   // ancestor dofs per body (the only non-zero Jacobian columns)
   int ndof_[NB], dofs_[NB][NV];
 

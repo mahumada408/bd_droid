@@ -74,4 +74,12 @@ void wbc_rbd_eval(const double* qpos, const double* qvel, int body, const double
   std::memcpy(Jcom, rbd.com_jac(), sizeof(double) * 3 * wbc::model::NV);
 }
 
+// Test hook: CoM bias acceleration (Jcom_dot qvel, 3) and the angular velocity of `body` (world, 3).
+void wbc_rbd_eval2(const double* qpos, const double* qvel, int body, double* com_bias, double* omega) {
+  static wbc::Rbd rbd;
+  rbd.forward(qpos, qvel);
+  std::memcpy(com_bias, rbd.com_bias(), sizeof(double) * 3);
+  std::memcpy(omega, rbd.omega(body), sizeof(double) * 3);
+}
+
 }  // extern "C"

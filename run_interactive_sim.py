@@ -9,6 +9,7 @@ Features:
   - Robust repeatable 360-degree backflip stunts with auto re-settling & multi-flip chaining
 """
 
+import math
 import os
 import sys
 import time
@@ -169,8 +170,8 @@ def main():
     print("  Driving & Cornering Controls:")
     print("    - DRIVE FORWARD:    Press 'W' or Up Arrow     (+0.2 m/s per tap)")
     print("    - SLOW / REVERSE:   Press 'S' or Down Arrow   (-0.2 m/s per tap)")
-    print("    - STEER LEFT (LEAN):Press 'A' or Left Arrow   (+0.3 rad/s + Active Bank)")
-    print("    - STEER RIGHT(LEAN):Press 'D' or Right Arrow  (-0.3 rad/s + Active Bank)")
+    print("    - STEER LEFT (LEAN):Press 'A' or Left Arrow   (+0.35 rad/s + Active Bank; BD droid: +0.5, carves)")
+    print("    - STEER RIGHT(LEAN):Press 'D' or Right Arrow  (-0.35 rad/s + Active Bank; BD droid: -0.5, carves)")
     print("    - BRAKE / STOP:     Press 'X'                 (Locks stationary position)")
     print("  Vertical Posture Controls:")
     print("    - CROUCH DOWN:      Press 'C'                 (Tap repeatedly to crouch lower; BD droid: down to sitting)")
@@ -298,8 +299,18 @@ def main():
         "settled": False,
     }
 
+    # Carving models (wbc_carve) lean the whole robot into turns and can turn much harder
+    carving = bool(getattr(wbc_solver, "carve", False))
+    yaw_max, yaw_step = (3.0, 0.5) if carving else (1.80, 0.35)
+
     def print_status(action_msg):
-        lean_str = " (Deep Bank Left)" if yaw_rate_target > 0.05 else (" (Deep Bank Right)" if yaw_rate_target < -0.05 else "")
+        if carving:
+            lean_deg = math.degrees(math.atan(min(abs(v_target * yaw_rate_target), wbc_solver.a_lat_max) / 9.81))
+            lean_deg = min(lean_deg, math.degrees(wbc_solver.max_bank))
+            side = "Left" if v_target * yaw_rate_target > 0 else "Right"
+            lean_str = f" (Carve {side} ~{lean_deg:.0f}°)" if abs(yaw_rate_target) > 0.05 and abs(v_target) > 0.05 else ""
+        else:
+            lean_str = " (Deep Bank Left)" if yaw_rate_target > 0.05 else (" (Deep Bank Right)" if yaw_rate_target < -0.05 else "")
         if 0.10 * qk_target < getattr(wbc_solver, "dh_min", -1):
             posture_str = "Sitting"
         elif qk_target < -0.35:
@@ -361,10 +372,10 @@ def main():
             v_target = np.clip(v_target - 0.25, -1.0, 2.0)
             print_status("Slow/Reverse")
         elif keycode in (ord('A'), ord('a'), 263):
-            yaw_rate_target = np.clip(yaw_rate_target + 0.35, -1.80, 1.80)
+            yaw_rate_target = np.clip(yaw_rate_target + yaw_step, -yaw_max, yaw_max)
             print_status("Steer Left")
         elif keycode in (ord('D'), ord('d'), 262):
-            yaw_rate_target = np.clip(yaw_rate_target - 0.35, -1.80, 1.80)
+            yaw_rate_target = np.clip(yaw_rate_target - yaw_step, -yaw_max, yaw_max)
             print_status("Steer Right")
         elif keycode in (ord('X'), ord('x')):
             v_target = 0.0

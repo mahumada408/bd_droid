@@ -156,20 +156,28 @@ void Rbd::forward(const double* qpos, const double* qvel) {
   }
   // Per-body CoM Jacobians, whole-robot CoM and its Jacobian
   double msum = 0.0;
-  for (int i = 0; i < 3; ++i) com_[i] = 0.0;
+  for (int i = 0; i < 3; ++i) com_[i] = comd_[i] = 0.0;
   std::memset(Jcom_, 0, sizeof(Jcom_));
   for (int b = 1; b < NB; ++b) {
     jac_impl(b, xipos_[b], Jc_[b], Jr_[b]);
     const double m = MASS[b];
     msum += m;
-    for (int i = 0; i < 3; ++i) com_[i] += m * xipos_[b][i];
+    double ab[3];
+    jacdot_qvel(b, xipos_[b], ab);
+    for (int i = 0; i < 3; ++i) {
+      com_[i] += m * xipos_[b][i];
+      comd_[i] += m * ab[i];
+    }
     for (int k = 0; k < ndof_[b]; ++k) {
       const int j = dofs_[b][k];
       for (int i = 0; i < 3; ++i) Jcom_[i * NV + j] += m * Jc_[b][i * NV + j];
     }
   }
   if (msum > 0) {
-    for (int i = 0; i < 3; ++i) com_[i] /= msum;
+    for (int i = 0; i < 3; ++i) {
+      com_[i] /= msum;
+      comd_[i] /= msum;
+    }
     for (int i = 0; i < 3 * NV; ++i) Jcom_[i] /= msum;
   }
 }

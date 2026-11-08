@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Export a one-piece, scaled display model of the BD droid (CAD/bd_droid_rs05.fs) as a binary STL.
+"""Export a one-piece, scaled display model of the BD droid (CAD/bd_droid_rs05.fs, v3.1) as a binary STL.
 
-This rebuilds the visible outer shape of the v3 gimbal-hip design from the same dimensions as the
+This rebuilds the visible outer shape of the v3.1 gimbal-hip design from the same dimensions as the
 FeatureScript, without the internals (bearings, electronics) or screw holes, and joins everything with a base
 plate into one solid that prints without assembly. Antenna rods are thickened so they survive the
 scale-down.
@@ -106,9 +106,9 @@ def leg(s, hz, R, ky, kz):
     """ky: knee y relative to the hip."""
     P = []
     ky = HY + ky
-    P.append(cyl((s * RX, -67, hz), (s * RX, -20, hz), 23))                 # hip-roll motor (inside the torso)
-    P.append(box(s * 10, s * 60.5, -18, 38, hz - 23, hz + 23))             # gimbal (closed for display)
-    P.append(cyl((s * 58, HY, hz), (s * 61.5, HY, hz), 15))                # hip-pitch output boss
+    P.append(cyl((s * RX, -67.5, hz), (s * RX, -20.5, hz), 23))             # hip-roll motor (inside the torso)
+    P.append(box(s * 15, s * 56.5, -18, 38, hz - 23, hz + 23))             # gimbal (closed for display)
+    P.append(cyl((s * 56, HY, hz), (s * 61.5, HY, hz), 15))                # thigh hub boss to the pitch output
     P.append(hull_yz(s * 61, s * 70, HY, hz, 26, ky, kz, 27))              # thigh plate (cap inlay flush)
     P.append(rs05(s * 17, s, ky, kz))                                      # knee motor, inner side of the thigh
     P.append(cyl((s * 63.5, ky, kz), (s * 71.5, ky, kz), 16))              # shin hub through the thigh bore
@@ -116,9 +116,9 @@ def leg(s, hz, R, ky, kz):
     P.append(strip(s * 78.5, s * 80, HY, R, ky, kz, 8, 32, 72))            # shin stripe
     P.append(cyl((s * 78.5, ky, kz), (s * 82, ky, kz), 17))                # knee cap
     P.append(rs05(s * 78.5, s, HY, R))                                     # wheel motor
-    P.append(cyl((s * 125.5, HY, R), (s * 130, HY, R), 34))                # hub disc
+    P.append(cyl((s * 125.5, HY, R), (s * 132, HY, R), 34))                # hub disc
+    P.append(cyl((s * 129.5, HY, R), (s * 132, HY, R), 38))                # tyre-retaining lip
     P.append(cyl((s * (WC - TW), HY, R), (s * (WC + TW), HY, R), 35.5))    # rim (solid)
-    P.append(cyl((s * 129.5, HY, R), (s * 130.5, HY, R), 13))              # flush hub cap
     grooves = [box(s * WC - 12, s * WC + 12, HY - 2.5, HY + 2.5, 2 * R - 2, 2 * R + 1)
                .translate([0, -HY, -R]).rotate([k * 18 + 9, 0, 0]).translate([0, HY, R]) for k in range(20)]
     P.append(crowned_tyre(s, R).translate([0, HY, 0]) - union(grooves))
@@ -131,7 +131,8 @@ def robot(hz=210.0, R=50.0, ant_r=2.5):
     ky = math.sqrt(105 ** 2 - half ** 2)
     P = leg(1, hz, R, ky, kz) + leg(-1, hz, R, ky, kz)
 
-    # torso (solid display shell): rounded front-bottom edge, hip sockets, XGT battery end in the rear opening
+    # torso (solid display shell): rounded front-bottom edge, hip sockets running forward as the lower side
+    # recesses (x +-48), XGT battery end in the rear opening
     tz0 = hz - HD
     zB = hz + 42
     zD = zB + 65
@@ -140,7 +141,7 @@ def robot(hz=210.0, R=50.0, ant_r=2.5):
     r = 30.0
     torso = torso - (box(-TXN - 1, TXN + 1, TYF - r, TYF + 1, tz0 - 1, tz0 + r)
                      - cyl((-TXN - 2, TYF - r, tz0 + r), (TXN + 2, TYF - r, tz0 + r), r))
-    torso = torso - union([box(s * 48, s * (TXN + 1), -19, 39, tz0 - 1, hz + 38) for s in (1, -1)])
+    torso = torso - union([box(s * 48, s * (TXN + 1), -19, TYF + 1, tz0 - 1, hz + 38) for s in (1, -1)])
     frame = box(-40, 40, TYB - 1, TYB + 1.5, zB - 1, zD + 1) - box(-38.5, 38.5, TYB - 2, TYB + 2, zB, zD)
     torso = torso - frame                                                   # groove around the battery end
     P.append(torso)

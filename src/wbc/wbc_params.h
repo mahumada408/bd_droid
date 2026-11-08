@@ -60,6 +60,22 @@ typedef struct WbcParams {
   double fall_kp, fall_kd, fall_kd_wheel, fall_tau_wheel, fall_recover_T;
   double qp_warm_start, qp_iter_max, qp_mu0;   // HPIPM: 0 cold / 1 primal / 2 primal+dual
   double sit_enable, sit_kp, sit_kd;   // sit: delta_h below the posture table -> legs to its lowest row, wheels braked
+  // Lean-led turning (see the "Bank" block in wbc_core.cpp)
+  double lean_rate;                // rad/s, slew limit on the bank reference
+  double lean_band;                // m/s^2, |g tan(lean) - a_lat| allowed: keeps the ZMP inside the track
+  double lean_lead;                // 1: turn rate limited by the lean actually reached (lean leads the turn)
+  double lean_T;                   // s, low-pass on the measured lateral acceleration
+  double half_track;               // m, half the hub-to-hub distance
+  double lean_room;                // m, extension kept in reserve on the outer leg while banked
+  double lean_crouch;              // m of extra crouch per rad of bank (style)
+  double neck_look, neck_look_max; // head yaw into the turn: rad per rad/s of yaw rate, clamp
+  double neck_level;               // fraction of the base roll the neck roll cancels (0: head rolls with the body)
+  double wheel_crown;              // m, tyre half width of a crowned (ellipsoid) tyre; 0: thin disk
+  double leg_fric_comp, leg_fric_T; // leg dry-friction feed-forward: fraction, look-ahead on the QP's qdd (s)
+  double fz_min;                   // N, least normal load per wheel the QP keeps while both are down
+  double fric_leg[WBC_MAX_ACT];    // leg joint dry friction per actuator (0 on wheels), Nm
+  int leg_side[WBC_MAX_ACT];       // per leg joint: +1 right leg, -1 left leg, 0 other (neck)
+  int neck_k[2];                   // leg-joint index of neck yaw, neck roll (-1: none)
 } WbcParams;
 
 // Layout of the info vector filled by wbc_step()
@@ -80,6 +96,9 @@ enum {
   WBC_INFO_DIST_R,           // estimated unmodeled wheel torque, Nm
   WBC_INFO_DIST_L,
   WBC_INFO_SAFE_FALL,        // 0 balancing, else latched safe-fall cause (1 lean, 2 roll, 3 tilt, 4 QP)
+  WBC_INFO_A_LAT,            // measured lateral acceleration v*omega (low-passed), m/s^2, + = turning left
+  WBC_INFO_DH_EFF,           // height offset actually used (command, lowered while banked), m
+  WBC_INFO_V_FWD,            // axle forward speed, m/s
   WBC_INFO_FC,               // 6 values
   WBC_INFO_QDD = WBC_INFO_FC + 6,   // nv values
 };

@@ -6,27 +6,33 @@ import(path : "onshape/std/common.fs", version : "3112.0");
 // Frame: x = robot right, y = forward, z = up, ground at z = 0, axle midpoint at x = 0, y = 0.
 // All dimensions in mm.
 //
-// RS05 interfaces (datasheet 1.1, first-angle projection):
-//   output face : rotor flange 6 x M4 on PCD 24 (depth 3.5), pilot D19, boss D30 x 3
-//                 stationary ring 8 x M3 on PCD 41.5 (depth 7)
-//   rear face   : 4 x M3 on PCD 38.5 (depth 10)
-//   1.6 N m rated, 5.5 N m peak, 480 rpm no-load at 48 V, 191 g.
-// Fasteners: clearance M3 = 3.4, M4 = 4.5, M2.5 = 2.9; heat-set insert holes M3 = 4.0, pilot M2 = 2.0.
+// RS05 interfaces (user manual 1.1 outline drawing):
+//   output (rotor): D30 shaft standing 3 mm proud of the housing, 6 x M4 on PCD 24 (threads only 3.5 deep: screw
+//                   length = grip + 3), 3 x D4 H7 dowel holes on PCD 19, D9 centre bore.
+//   output-side housing (stator): 8 x M3 on PCD 41.5 (7 deep), D35 x 0.5 step around the shaft.
+//   rear face : 4 x M3 on PCD 38.5 (10 deep). Power + CAN on an AMASS XT30PB(2+2) (mate: XT30(2+2)-F).
+//   1.6 N m rated, 5.5 N m peak, 480 rpm no-load at 48 V, 191 g, D46 x 44 body.
+// Printed fits (calibrate with CAD/print/fit_coupon.stl first): clearance M3 3.4, M4 4.5; heat-set M3 x 5.7
+// inserts 4.0; D4 dowel press 3.9; 6800 seat 19.1 (clamped by a cap); stator bores 35.3.
 //
-// DEFAULT DESIGN v3 (after inspiration_robot.mp4): gimbal hip, every joint direct drive, full crouch.
+// DEFAULT DESIGN v3.1 (after inspiration_robot.mp4): gimbal hip, every joint direct drive, full crouch, buildable.
 //   hip       : the roll (fore-aft) and pitch (lateral) axes intersect at the hip point (x +-32, y 10), inside the
 //               lower torso 33 mm above its bottom. Nothing hangs below the torso, so the legs fold beside it until
 //               the torso sits on the ground (hip 33 mm up, thigh about horizontal, knee motor ahead of the torso).
-//   hip roll  : RS05, axis along y, clamped at both ends: rear face on the rear wall (4 x M3), stator ring on the
-//               mid bulkhead (8 x M3 countersunk). Its output turns the gimbal.
-//   gimbal    : printed frame around the hip-pitch RS05 (back, front, inner and outer plates). Back plate on the
-//               roll output (6 x M4), front plate on a D10 stub in a 6800-2RS in the front bulkhead.
-//   thigh     : flat 9 mm plate (x 61..70) just outside the side wall, in a hip socket (side-wall notch) that
-//               leaves room for +-0.35 rad roll. Flush hip-cap inlay so the shin can fold over the hip.
+//   hip roll  : RS05, axis along y, clamped at both ends: rear face in a pocket in the rear wall (4 x M3), stator
+//               on the mid bulkhead (6 x M3 countersunk; the bulkhead has a top-open U-slot so it drops in).
+//   gimbal    : one printed frame (back, front and outer plates; open on the inner side). Back plate on the roll
+//               output (6 x M4 countersunk + 3 dowels), front stub in a 6800-2RS held by a bolt-on bearing cap,
+//               pitch stator on the outer plate (8 x M3).
+//   thigh     : 9 mm plate (x 61..70) with a hub boss reaching through the outer-plate bore to the pitch output.
+//               It swings in a hip socket (side-wall notch); ahead of it the lower side walls step in to x +-48
+//               (front recess), so the thigh clears the torso over the full roll range at every crouch height. Flush hip-cap inlay
+//               so the shin can fold over the hip.
 //   knee      : RS05 on the thigh's inner side at the knee (x 17..61); output through the thigh bore to the shin hub.
-//   shin      : 8 mm plate (x 71..79); wheel RS05 (x 79..123) inside a crowned 49 mm TPU tyre (x 81..130).
+//   shin      : 8 mm plate (x 71..79) with a harness channel under the orange stripe cover; wheel RS05 (x 79..123)
+//               inside a crowned 49 mm TPU tyre (x 81..130) on a printed hub.
 //   Track 211 mm. The torso's front-bottom edge is rounded (r 30) so the knee motor clears it while folding.
-// Set "Hip axis height" to 33 mm to see the robot sitting on its torso.
+// Assembly order and the parts list: docs/BUILD.md. Set "Hip axis height" to 33 mm to see the robot sitting.
 // Earlier designs: CAD/variants/ (bd_droid_rs05_cradle_hip.fs = v2, bd_droid_rs05_inboard_slim.fs = belt knee).
 
 function P(x, y, z) { return vector(x, y, z) * millimeter; }
@@ -179,6 +185,47 @@ function rs05y(context is Context, id is Id, x, rearY, s, z, name is string)
     tagPart(context, bq(id + "h"), name, color(0.12, 0.12, 0.13));
 }
 
+// 90 deg countersinks for a bolt circle (head radius hr: M3 DIN 7991 3.2, M4 4.1), cut into target from the
+// face at a0, going in direction dir (+1 / -1 along the axis).
+function csinks(context is Context, id is Id, target is Query, ax is string, cu, cv, a0, dir, n, pcd, phase, hr)
+{
+    var tools = [];
+    for (var k = 0; k < n; k += 1)
+    {
+        const ang = phase + k * 360 / n;
+        const u = cu + pcd / 2 * cos(ang * degree);
+        const v = cv + pcd / 2 * sin(ang * degree);
+        fCone(context, id + ("c" ~ k), { "topCenter" : axPt(ax, a0 - dir * 0.3, u, v), "bottomCenter" : axPt(ax, a0 + dir * (hr - 1.0), u, v),
+                    "topRadius" : (hr + 0.3) * millimeter, "bottomRadius" : 1.0 * millimeter });
+        tools = append(tools, bq(id + ("c" ~ k)));
+    }
+    subtr(context, id + "cut", target, qUnion(tools));
+}
+
+// RS05 output (rotor) interface, cut through target along ax from a0 to a1 at (cu, cv):
+// 6 x M4 clearance on PCD 24, 3 x D4 dowel holes (printed 3.9 = press fit for D4 x 8 pins) on PCD 19, D9.5 centre.
+// Counterbores D8 from cb0 to cb1 (skipped when cb0 == cb1) set the screw grip: the rotor threads are only
+// 3.5 deep, so grip + 3 = screw length.
+function rotorIface(context is Context, id is Id, target is Query, ax is string, cu, cv, a0, a1, cb0, cb1)
+{
+    holes(context, id + "m4", target, ax, cu, cv, a0, a1, 6, 24, 4.5, 0);
+    holes(context, id + "dw", target, ax, cu, cv, a0, a1, 3, 19, 3.9, 30);
+    hole(context, id + "c", target, ax, cu, cv, a0, a1, 9.5);
+    if (cb0 != cb1)
+        holes(context, id + "cb", target, ax, cu, cv, cb0, cb1, 6, 24, 8, 0);
+}
+
+// RS05 stator (output-side housing) interface: D35.3 bore (clears the 30 mm output shaft and locates on the
+// 35 mm step), 8 x M3 on PCD 41.5 (threads 7 deep). cdir != 0: countersunk from the face at cf, cdir = direction
+// from that face into the part.
+function statorIface(context is Context, id is Id, target is Query, ax is string, cu, cv, a0, a1, cf, cdir)
+{
+    hole(context, id + "b", target, ax, cu, cv, a0, a1, 35.3);
+    holes(context, id + "s", target, ax, cu, cv, a0, a1, 8, 41.5, 3.4, 22.5);
+    if (cdir != 0)
+        csinks(context, id + "k", target, ax, cu, cv, cf, cdir, 8, 41.5, 22.5, 3.2);
+}
+
 const WHITE = color(0.86, 0.83, 0.76);
 const ORANGE = color(0.85, 0.38, 0.14);
 const DARK = color(0.22, 0.22, 0.23);
@@ -195,6 +242,9 @@ const WALL = 3;
 const RX = 32;      // hip point |x| (roll axis)
 const HY = 10;      // hip point y (over the centre of mass, so the thigh lies flat at full crouch)
 const HD = 33;      // hip axis height above the torso bottom
+const GB0 = 15;     // gimbal back / front plates start (|x|)
+const GO0 = 53.5;   // gimbal outer plate inner face = hip-pitch stator face (|x|)
+const GO1 = 56.5;   // gimbal outer plate outer face = hip-pitch output face (|x|); torso wall inner face is 57
 
 function buildLeg(context is Context, id is Id, def is map, s is number, side is string)
 {
@@ -204,48 +254,48 @@ function buildLeg(context is Context, id is Id, def is map, s is number, side is
     const kz = def.kneeZ;
     const rx = s * RX;
 
-    // ---- Hip-roll RS05: axis along y, rear face on the torso rear wall (y -67), output face y -20 ----
-    rs05y(context, id + "rollM", rx, -67, 1, hz, "RS05 hip roll " ~ side);
+    // ---- Hip-roll RS05: axis along y, rear face in a 0.5 mm pocket in the torso rear wall (y -67.5), output face y -20.5.
+    //      Drops in from the top: its output shaft enters the mid bulkhead through a top-open U-slot. ----
+    rs05y(context, id + "rollM", rx, -67.5, 1, hz, "RS05 hip roll " ~ side);
 
-    // ---- Gimbal frame (printed PA-CF) around the hip-pitch motor: back plate on the roll output,
-    //      front plate on a D10 stub in the front-bulkhead 6800, inner plate on the pitch rear face,
-    //      outer plate on its stator ring. Roll and pitch axes intersect at (rx, HY, hz). ----
-    mkBox(context, id + "gbB", s * 10, s * 60.5, -18, -13, hz - 23, hz + 23);               // back plate
-    mkBox(context, id + "gbF", s * 10, s * 60.5, 33, 38, hz - 23, hz + 23);                 // front plate
-    mkBox(context, id + "gbI", s * 10, s * 14, -18, 38, hz - 21, hz + 21);                  // inner plate
-    mkBox(context, id + "gbO", s * 58, s * 60.5, -18, 38, hz - 23, hz + 23);                // outer plate
+    // ---- Gimbal frame (one printed PA-CF part): back plate on the roll output, front plate with a D10 stub in a
+    //      6800-2RS in the front bulkhead (bolt-on bearing cap), outer plate on the pitch stator ring.
+    //      Open on the inner side, top and bottom: the pitch motor drops in from above and slides outward through
+    //      the outer-plate bore. Roll and pitch axes intersect at (rx, HY, hz). Every edge is inside |x| <= 56.5,
+    //      so the frame drops in past the torso side walls (inner face 57). ----
+    mkBox(context, id + "gbB", s * GB0, s * GO1, -18, -13.5, hz - 23, hz + 23);               // back plate
+    mkBox(context, id + "gbF", s * GB0, s * GO1, 33.5, 38, hz - 23, hz + 23);                 // front plate
     try silent { opFillet(context, id + "gbBf", { "entities" : qParallelEdges(qCreatedBy(id + "gbB", EntityType.EDGE), Y_DIRECTION), "radius" : 7 * millimeter }); }
     try silent { opFillet(context, id + "gbFf", { "entities" : qParallelEdges(qCreatedBy(id + "gbF", EntityType.EDGE), Y_DIRECTION), "radius" : 7 * millimeter }); }
-    cyl(context, id + "gbP", P(rx, -20, hz), P(rx, -18, hz), 17);                           // pad onto the roll output
-    cyl(context, id + "gbS", P(rx, 38, hz), P(rx, 44, hz), 5);                              // D10 stub into the 6800
-    uni(context, id + "gbU", qUnion([bq(id + "gbB"), bq(id + "gbF"), bq(id + "gbI"), bq(id + "gbO"), bq(id + "gbP"), bq(id + "gbS")]));
+    mkBox(context, id + "gbO", s * GO0, s * GO1, -18, 38, hz - 23, hz + 23);                 // outer plate
+    cyl(context, id + "gbP", P(rx, -20.5, hz), P(rx, -18, hz), 17);                          // pad onto the roll output
+    cyl(context, id + "gbS", P(rx, 38, hz), P(rx, 44, hz), 5);                               // D10 stub into the 6800
+    uni(context, id + "gbU", qUnion([bq(id + "gbB"), bq(id + "gbF"), bq(id + "gbO"), bq(id + "gbP"), bq(id + "gbS")]));
     const gb = bq(id + "gbB");
-    holes(context, id + "gbRo", gb, "y", rx, hz, -21, -12, 6, 24, 4.5, 0);                  // 6 x M4 to the roll output
-    hole(context, id + "gbRoc", gb, "y", rx, hz, -21, -12, 10);
-    holes(context, id + "gbPr", gb, "x", HY, hz, s * 9, s * 15, 4, 38.5, 3.4, 45);           // 4 x M3 pitch rear face
-    hole(context, id + "gbPrc", gb, "x", HY, hz, s * 9, s * 15, 14);
-    hole(context, id + "gbPo", gb, "x", HY, hz, s * 57, s * 61, 36);                        // stator-ring plate bore
-    holes(context, id + "gbPos", gb, "x", HY, hz, s * 57, s * 61, 8, 41.5, 3.4, 22.5);       // 8 x M3 stator ring
+    rotorIface(context, id + "gbRo", gb, "y", rx, hz, -21.5, -12.5, 0, 0);                  // roll output: 6 x M4 + 3 dowels
+    csinks(context, id + "gbRk", gb, "y", rx, hz, -13.5, -1, 6, 24, 0, 4.1);                 // flush heads (grip 7: M4 x 10 DIN 7991)
+    statorIface(context, id + "gbPo", gb, "x", HY, hz, s * (GO0 - 1), s * (GO1 + 1), 0, 0);   // pitch stator: 8 x M3
     tagPart(context, gb, "Hip gimbal " ~ side, DARK);
 
-    // ---- Hip-pitch RS05 in the gimbal ----
-    rs05x(context, id + "pitchM", s * 14, s, HY, hz, "RS05 hip pitch " ~ side);
+    // ---- Hip-pitch RS05 in the gimbal (rear face toward the torso centre, output face flush with the outer plate) ----
+    rs05x(context, id + "pitchM", s * (GO0 - 44), s, HY, hz, "RS05 hip pitch " ~ side);
 
-    // ---- Thigh plate (printed PA-CF) with a flush hip-cap inlay (the shin folds over the hip) ----
+    // ---- Thigh plate (printed PA-CF) with a hub boss through the outer-plate bore onto the pitch output, and a flush
+    //      hip-cap inlay (the shin folds over the hip). ----
     hullYZ(context, id + "th", s * 61, s * 70, HY, hz, 26, ky, kz, 27);
+    cyl(context, id + "thHb", P(s * GO1, HY, hz), P(s * 61, HY, hz), 15);                    // hub boss to the pitch output
+    uni(context, id + "thHbU", qUnion([bq(id + "th" + "q"), bq(id + "thHb")]));
     const th = bq(id + "th" + "q");
-    holes(context, id + "thH", th, "x", HY, hz, s * 60, s * 71, 6, 24, 4.5, 0);             // 6 x M4 to the pitch output
-    hole(context, id + "thHc", th, "x", HY, hz, s * 60, s * 71, 10);
+    rotorIface(context, id + "thH", th, "x", HY, hz, s * (GO1 - 1), s * 71, s * (GO1 + 9), s * 71);   // grip 9: M4 x 12
     hole(context, id + "thHi", th, "x", HY, hz, s * 68.5, s * 71, 44);                      // inlay pocket
-    hole(context, id + "thK", th, "x", ky, kz, s * 60, s * 71, 36);                         // knee output + shin hub
-    holes(context, id + "thKs", th, "x", ky, kz, s * 60, s * 71, 8, 41.5, 3.4, 22.5);        // 8 x M3 (countersunk) knee stator
+    statorIface(context, id + "thK", th, "x", ky, kz, s * 60, s * 71, s * 70, -s);            // knee stator, countersunk outside
     const Lt = sqrt((ky - HY) * (ky - HY) + (kz - hz) * (kz - hz));
-    mkBox(context, id + "thW", s * 60, s * 71, -9, 9, 34, Lt - 34);                         // lightening slot
+    mkBox(context, id + "thW", s * 60, s * 71, -9, 9, 34, Lt - 34);                         // lightening slot / harness run
     opTransform(context, id + "thWr", { "bodies" : bq(id + "thW"),
                 "transform" : transform(P(0, HY, hz)) * rotationAround(line(P(0, 0, 0), X_DIRECTION), atan2(-(ky - HY), kz - hz)) });
     subtr(context, id + "thWC", th, bq(id + "thW"));
     tagPart(context, th, "Thigh " ~ side, WHITE);
-    cyl(context, id + "hcap", P(s * 68.5, HY, hz), P(s * 70, HY, hz), 22);
+    cyl(context, id + "hcap", P(s * 68.5, HY, hz), P(s * 70, HY, hz), 21.8);
     tagPart(context, bq(id + "hcap"), "Hip cap inlay " ~ side, ORANGE);
 
     // ---- Knee RS05 on the thigh's inner side ----
@@ -253,16 +303,21 @@ function buildLeg(context is Context, id is Id, def is map, s is number, side is
 
     // ---- Shin (printed PA-CF) + hub through the thigh bore onto the knee output ----
     mkLink(context, id + "shin", s * 71, s * 79, ky, kz, HY, R, 17, 26);
-    cyl(context, id + "shHub", P(s * 64, ky, kz), P(s * 71, ky, kz), 16);
+    cyl(context, id + "shHub", P(s * 64, ky, kz), P(s * 71, ky, kz), 15);
     uni(context, id + "shU", qUnion([bq(id + "shin" + "web"), bq(id + "shHub")]));
     const shin = bq(id + "shin" + "web");
-    holes(context, id + "shK", shin, "x", ky, kz, s * 63, s * 80, 6, 24, 4.5, 0);           // 6 x M4 to the knee output
-    hole(context, id + "shKc", shin, "x", ky, kz, s * 63, s * 80, 8);
-    holes(context, id + "shW", shin, "x", HY, R, s * 70, s * 80, 4, 38.5, 3.4, 45);         // 4 x M3 to wheel-motor rear face
+    rotorIface(context, id + "shK", shin, "x", ky, kz, s * 63, s * 80, s * 73, s * 80);      // grip 9: M4 x 12
+    holes(context, id + "shKp", shin, "x", ky, kz, s * 75, s * 80, 3, 30, 2.2, 90);          // knee-cap pilots (M2.5 plastite)
+    // wheel-motor rear face: 4 x M3 countersunk from the inner face (flush, the shin folds over the thigh)
+    holes(context, id + "shW", shin, "x", HY, R, s * 70, s * 80, 4, 38.5, 3.4, 45);
+    csinks(context, id + "shWk", shin, "x", HY, R, s * 71, s, 4, 38.5, 45, 3.2);
     hole(context, id + "shWc", shin, "x", HY, R, s * 70, s * 80, 12);
+    // harness channel on the outer face, wheel-motor pigtail to the knee, under the stripe cover
+    linkBox(context, id + "shCh", s * 76, s * 80, HY, R, ky, kz, 6, 18, 86);
+    subtr(context, id + "shChC", shin, bq(id + "shCh"));
     tagPart(context, shin, "Shin " ~ side, WHITE);
-    linkBox(context, id + "sstr", s * 79, s * 80, HY, R, ky, kz, 8, 32, 72);
-    tagPart(context, bq(id + "sstr"), "Shin stripe " ~ side, ORANGE);
+    linkBox(context, id + "sstr", s * 79, s * 80.5, HY, R, ky, kz, 10, 26, 72);
+    tagPart(context, bq(id + "sstr"), "Shin stripe cover " ~ side, ORANGE);
     cyl(context, id + "kcap", P(s * 79, ky, kz), P(s * 82, ky, kz), 17);
     holes(context, id + "kcapH", bq(id + "kcap"), "x", ky, kz, s * 78, s * 83, 3, 30, 2.9, 90);
     tagPart(context, bq(id + "kcap"), "Knee cap " ~ side, ORANGE);
@@ -272,23 +327,17 @@ function buildLeg(context is Context, id is Id, def is map, s is number, side is
 
     const wc = s * 105.5;
     const TW = 24.5;                                                                            // tyre half width
-    const xo = s * 130;                                                                         // outer face
-    cyl(context, id + "hubd", P(s * 126, HY, R), P(xo, HY, R), 34);
+    const xo = s * 130;                                                                         // tyre outer face
+    cyl(context, id + "hubd", P(s * 126, HY, R), P(s * 132, HY, R), 34);                       // hub disc on the output
+    cyl(context, id + "hubl", P(s * 130, HY, R), P(s * 132, HY, R), 38);                       // outer lip: retains the tyre
     cyl(context, id + "rim", P(wc - s * TW, HY, R), P(xo, HY, R), 35);
     cyl(context, id + "rimi", P(wc - s * (TW + 1), HY, R), P(xo - s * 4, HY, R), 31);
     subtr(context, id + "rimc", bq(id + "rim"), bq(id + "rimi"));
-    uni(context, id + "hubu", qUnion([bq(id + "rim"), bq(id + "hubd")]));
+    uni(context, id + "hubu", qUnion([bq(id + "rim"), bq(id + "hubd"), bq(id + "hubl")]));
     const hub = bq(id + "rim");
-    holes(context, id + "hubDec", hub, "x", HY, R, s * 125, s * 131, 6, 46, 10, 30);           // lightening holes
-    holes(context, id + "hubM4", hub, "x", HY, R, s * 125, s * 131, 6, 24, 4.5, 0);            // 6 x M4 to wheel-motor output
-    hole(context, id + "hubC", hub, "x", HY, R, s * 125, s * 131, 10);
-    holes(context, id + "hubCapP", hub, "x", HY, R, s * 125, s * 131, 3, 18, 2.0, 90);         // hub-cap pilots
-    hole(context, id + "hubCapR", hub, "x", HY, R, s * 127.5, s * 131, 26.5);                  // recess: hub cap sits flush
+    holes(context, id + "hubDec", hub, "x", HY, R, s * 125, s * 133, 6, 46, 10, 30);           // lightening holes
+    rotorIface(context, id + "hubM4", hub, "x", HY, R, s * 125, s * 133, s * 129, s * 133);   // grip 3: M4 x 6
     tagPart(context, hub, "Wheel hub " ~ side, GREY);
-
-    cyl(context, id + "hubcap", P(s * 127.5, HY, R), P(xo, HY, R), 13);
-    holes(context, id + "hubcapH", bq(id + "hubcap"), "x", HY, R, s * 127, s * 131, 3, 18, 2.5, 90);
-    tagPart(context, bq(id + "hubcap"), "Hub cap " ~ side, ORANGE);
 
     // crowned TPU tyre: 14 mm shoulders, so the contact patch stays centred when hip roll cambers the wheel
     cyl(context, id + "tyre", P(wc - s * TW, HY, R), P(wc + s * TW, HY, R), R);
@@ -369,30 +418,48 @@ export const bdDroidRS05 = defineFeature(function(context is Context, id is Id, 
         roundEdgeX(context, id + "rndI", bq(id + "torsoI"), yf, fl, 27, 1, -1);
         subtr(context, id + "torsoC", torso, bq(id + "torsoI"));
         // hip sockets: notch the lower side walls and floor edge where the thigh and gimbal swing (before the bulkheads)
+        // Forward of the sockets the lower side walls step in to x +-48 (front recess): hip roll swings the thigh's
+        // lower edge (standing, roll in) and its upper edge (crouched, roll out) inboard of the main wall line.
         for (var s = -1; s <= 1; s += 2)
         {
-            mkBox(context, id + ("sock" ~ (s > 0 ? "R" : "L")), s * 48, s * (TXN + 1), -19, 39, tz0 - 1, zT);
-            subtr(context, id + ("sockC" ~ (s > 0 ? "R" : "L")), torso, bq(id + ("sock" ~ (s > 0 ? "R" : "L"))));
+            const sd = s > 0 ? "R" : "L";
+            mkBox(context, id + ("sock" ~ sd), s * 48, s * (TXN + 1), -19, TYF + 1, tz0 - 1, zT);
+            subtr(context, id + ("sockC" ~ sd), torso, bq(id + ("sock" ~ sd)));
         }
 
         // Internal features fused to the shell: lid bosses, shelf ledges, bulkheads, Nucleo standoffs, carrier posts
         var feats = [torso];
-        const lidPts = [[51.5, -61.5], [-51.5, -61.5], [51.5, 79.5], [-51.5, 79.5]];
-        for (var k = 0; k < 4; k += 1)
+        // lid: 3 screws. The rear one sits between the two roll motors, so nothing overhangs the hip drop-in paths
+        const lidPts = [[0, -62], [51.5, 79.5], [-51.5, 79.5]];
+        for (var k = 0; k < size(lidPts); k += 1)
         {
-            cyl(context, id + ("lb" ~ k), P(lidPts[k][0], lidPts[k][1], tz1 - 15), P(lidPts[k][0], lidPts[k][1], tz1), 6);
-            feats = append(feats, bq(id + ("lb" ~ k)));
+            // lid boss with a 45 deg cone under it, so the shell prints upright without supports
+            const lr = k == 0 ? 5 : 6;
+            cyl(context, id + ("lb" ~ k), P(lidPts[k][0], lidPts[k][1], tz1 - 15), P(lidPts[k][0], lidPts[k][1], tz1), lr);
+            fCone(context, id + ("lbc" ~ k), { "topCenter" : P(lidPts[k][0], lidPts[k][1], tz1 - 15), "bottomCenter" : P(lidPts[k][0], lidPts[k][1], tz1 - 15 - lr),
+                        "topRadius" : lr * millimeter, "bottomRadius" : 0.5 * millimeter });
+            feats = concatenateArrays([feats, [bq(id + ("lb" ~ k)), bq(id + ("lbc" ~ k))]]);
         }
-        const shelfPts = [[53.5, -45], [-53.5, -45], [53.5, 50.5], [-53.5, 50.5]];
-        for (var k = 0; k < 4; k += 1)
+        // Battery-shelf supports: full-height columns (no overhangs), clear of the hip modules' drop-in paths.
+        // Front corners beside the front bulkhead; rear-centre on the rear wall and mid-centre on the mid bulkhead,
+        // between the two roll motors.
+        // recess walls (x 45..48) closing the lower front corners, front-bottom edge rounded like the shell
+        for (var s = -1; s <= 1; s += 2)
         {
-            const sx = shelfPts[k][0] > 0 ? 1 : -1;
-            mkBox(context, id + ("tl" ~ k), sx * 50, sx * (xn + 0.5), shelfPts[k][1] - 7, shelfPts[k][1] + 7, zT - 8, zT);
-            feats = append(feats, bq(id + ("tl" ~ k)));
+            const sd = s > 0 ? "R" : "L";
+            mkBox(context, id + ("rcW" ~ sd), s * 45, s * 48, 47, TYF, tz0, zT);
+            roundEdgeX(context, id + ("rcWr" ~ sd), bq(id + ("rcW" ~ sd)), TYF, tz0, 30, 1, -1);
+            feats = append(feats, bq(id + ("rcW" ~ sd)));
         }
-        // Bulkheads: mid (roll stator rings) and front (gimbal 6800s), floor to battery shelf
-        mkBox(context, id + "bhM", -xn - 0.5, xn + 0.5, -23, -20, fl - 0.5, zT);
-        mkBox(context, id + "bhF", -47, 47, 39, 45, fl - 0.5, zT);
+        const shelfPts = [[41.5, 50], [-41.5, 50], [0, -63], [0, -26]];
+        mkBox(context, id + "tl0", 38, 45.5, 47, 56, fl - 0.5, zT);
+        mkBox(context, id + "tl1", -38, -45.5, 47, 56, fl - 0.5, zT);
+        mkBox(context, id + "tl2", -6, 6, yb - 0.5, -59, fl - 0.5, zT);
+        mkBox(context, id + "tl3", -6, 6, -31, -23, fl - 0.5, zT);
+        feats = concatenateArrays([feats, [bq(id + "tl0"), bq(id + "tl1"), bq(id + "tl2"), bq(id + "tl3")]]);
+        // Bulkheads: mid (roll stator rings, y -23.5..-20.5) and front (gimbal 6800s), floor to battery shelf
+        mkBox(context, id + "bhM", -xn - 0.5, xn + 0.5, -23.5, -20.5, fl - 0.5, zT);
+        mkBox(context, id + "bhF", -47, 47, 39, 47, fl - 0.5, zT);
         feats = concatenateArrays([feats, [bq(id + "bhM"), bq(id + "bhF")]]);
         // Nucleo: vertical on the front wall, components facing back, ST-LINK USB end (by = 133.34) at the top.
         const nyS = yf - 12;           // board front face (y); 12 mm standoffs clear the morpho pins
@@ -405,43 +472,76 @@ export const bdDroidRS05 = defineFeature(function(context is Context, id is Id, 
             feats = append(feats, bq(id + ("ns" ~ k)));
         }
         // power / CAN board posts on the right side wall (board stands beside the battery, x 53..54.6)
-        const pbPts = [[-56, zB + 6], [9, zB + 6], [-56, zB + 26], [9, zB + 26]];
+        const pbPts = [[-56, zB + 6], [-30, zB + 6], [-56, zB + 26], [-30, zB + 26]];   // outboard of the roll-motor drop path (x > 55.6), behind the gimbal path
         for (var k = 0; k < 4; k += 1)
         {
-            cyl(context, id + ("ps" ~ k), P(54.6, pbPts[k][0], pbPts[k][1]), P(xn + 0.5, pbPts[k][0], pbPts[k][1]), 3.2);
+            cyl(context, id + ("ps" ~ k), P(55.6, pbPts[k][0], pbPts[k][1]), P(xn + 0.5, pbPts[k][0], pbPts[k][1]), 3.2);
             feats = append(feats, bq(id + ("ps" ~ k)));
         }
         uni(context, id + "torsoU", qUnion(feats));
 
+        for (var k = 0; k < size(lidPts); k += 1)
+            hole(context, id + ("lbh" ~ k), torso, "z", lidPts[k][0], lidPts[k][1], tz1 - 10, tz1 + 1, 4.0);             // lid inserts
         for (var k = 0; k < 4; k += 1)
-        {
-            hole(context, id + ("lbh" ~ k), torso, "z", lidPts[k][0], lidPts[k][1], tz1 - 10, tz1 + 1, 4.0);         // lid inserts
-            hole(context, id + ("tlh" ~ k), torso, "z", shelfPts[k][0], shelfPts[k][1], zT - 7, zT + 1, 4.0);        // shelf inserts
-        }
+            hole(context, id + ("tlh" ~ k), torso, "z", shelfPts[k][0], shelfPts[k][1], zT - 7, zT + 1, 4.0);            // shelf inserts
         for (var k = 0; k < 5; k += 1)
             hole(context, id + ("nsh" ~ k), torso, "y", nPts[k][0], nPts[k][1], nyS - 1, yf - 2, 4.0);              // Nucleo inserts
         for (var k = 0; k < 4; k += 1)
-            hole(context, id + ("psh" ~ k), torso, "x", pbPts[k][0], pbPts[k][1], 54, 57, 4.0);                    // board inserts
+            hole(context, id + ("psh" ~ k), torso, "x", pbPts[k][0], pbPts[k][1], 55, 59.4, 4.0);                  // board inserts (M3 x 4)
         // battery opening in the rear wall
         mkBox(context, id + "battOpen", -40, 40, TYB - 1, yb + 1, zB - 1, zD + 1);
         subtr(context, id + "battOpenC", torso, bq(id + "battOpen"));
         for (var s = -1; s <= 1; s += 2)
         {
             const sid = s > 0 ? "R" : "L";
-            // roll motor: rear face 4 x M3 through the rear wall (+ connector access), stator ring 8 x M3 on the mid bulkhead
-            holes(context, id + ("rwS" ~ sid), torso, "y", s * RX, hz, TYB - 1, yb + 1, 4, 38.5, 3.4, 45);
-            hole(context, id + ("rwC" ~ sid), torso, "y", s * RX, hz, TYB - 1, yb + 1, 14);
-            hole(context, id + ("bmB" ~ sid), torso, "y", s * RX, hz, -24, -19, 36);
-            holes(context, id + ("bmS" ~ sid), torso, "y", s * RX, hz, -24, -19, 8, 41.5, 3.4, 22.5);
-            // front bulkhead: 6800 seat for the gimbal stub
-            hole(context, id + ("bfB" ~ sid), torso, "y", s * RX, hz, 38, 44, 19);
-            hole(context, id + ("bfT" ~ sid), torso, "y", s * RX, hz, 38, 46, 12);
+            const rx = s * RX;
+            // roll motor rear face: 0.5 mm locating pocket in the rear wall, open to the top so the motor slides
+            // down into it; 4 x M3 through (+ D14 centre access)
+            cyl(context, id + ("rwP" ~ sid), P(rx, -67.5, hz), P(rx, -66.5, hz), 23.6);
+            mkBox(context, id + ("rwPU" ~ sid), rx - 23.6, rx + 23.6, -67.5, -66.5, hz, tz1 + 1);
+            subtr(context, id + ("rwPC" ~ sid), torso, qUnion([bq(id + ("rwP" ~ sid)), bq(id + ("rwPU" ~ sid))]));
+            holes(context, id + ("rwS" ~ sid), torso, "y", rx, hz, TYB - 1, yb + 1, 4, 38.5, 3.4, 45);
+            hole(context, id + ("rwC" ~ sid), torso, "y", rx, hz, TYB - 1, yb + 1, 14);
+            // mid bulkhead: D31 bore + top-open U-slot for the roll output shaft (drop-in), 0.6 mm relief for the
+            // 35 mm housing step, and 6 of the 8 stator screws (the two top ones fall in the slot), countersunk in front
+            cyl(context, id + ("bmB" ~ sid), P(rx, -24, hz), P(rx, -20, hz), 15.5);
+            mkBox(context, id + ("bmU" ~ sid), rx - 15.5, rx + 15.5, -24, -20, hz, zT + 1);
+            cyl(context, id + ("bmR" ~ sid), P(rx, -24, hz), P(rx, -22.9, hz), 17.65);
+            mkBox(context, id + ("bmRU" ~ sid), rx - 17.65, rx + 17.65, -24, -22.9, hz, zT + 1);
+            subtr(context, id + ("bmC" ~ sid), torso, qUnion([bq(id + ("bmB" ~ sid)), bq(id + ("bmU" ~ sid)), bq(id + ("bmR" ~ sid)), bq(id + ("bmRU" ~ sid))]));
+            holesSkip(context, id + ("bmS" ~ sid), torso, "y", rx, hz, -24.5, -19.5, 8, 41.5, 3.4, 22.5, 90, 30);
+            for (var k = 0; k < 8; k += 1)
+            {
+                const ang = 22.5 + 45 * k;
+                if (ang > 60 && ang < 120)
+                    continue;
+                csinks(context, id + ("bmK" ~ sid ~ k), torso, "y", rx + 20.75 * cos(ang * degree), hz + 20.75 * sin(ang * degree), -20.5, -1, 1, 0, 0, 3.2);
+            }
+            // front bulkhead: split 6800 seat (pillow block). Notch above the axis so the gimbal + bearing drop in,
+            // bolt-on bearing cap (2 x M3 into inserts) closes it.
+            mkBox(context, id + ("bfN" ~ sid), rx - 17, rx + 17, 38, 47, hz, zT + 1);
+            subtr(context, id + ("bfNC" ~ sid), torso, bq(id + ("bfN" ~ sid)));
+            hole(context, id + ("bfB" ~ sid), torso, "y", rx, hz, 38, 44, 19.1);
+            hole(context, id + ("bfT" ~ sid), torso, "y", rx, hz, 38, 48, 12);
+            hole(context, id + ("bfI1" ~ sid), torso, "z", rx - 13.5, 43, hz - 9, hz + 1, 4.0);
+            hole(context, id + ("bfI2" ~ sid), torso, "z", rx + 13.5, 43, hz - 9, hz + 1, 4.0);
+            mkBox(context, id + ("bcap" ~ sid), rx - 17, rx + 17, 39, 47, hz, hz + 14);
+            try silent { opFillet(context, id + ("bcapF" ~ sid), { "entities" : qParallelEdges(qCreatedBy(id + ("bcap" ~ sid), EntityType.EDGE), Y_DIRECTION), "radius" : 4 * millimeter }); }
+            const bcq = bq(id + ("bcap" ~ sid));
+            hole(context, id + ("bcB" ~ sid), bcq, "y", rx, hz, 38, 44, 19.1);
+            hole(context, id + ("bcT" ~ sid), bcq, "y", rx, hz, 38, 48, 12);
+            hole(context, id + ("bcH1" ~ sid), bcq, "z", rx - 13.5, 43, hz - 1, hz + 15, 3.4);
+            hole(context, id + ("bcH2" ~ sid), bcq, "z", rx + 13.5, 43, hz - 1, hz + 15, 3.4);
+            tagPart(context, bcq, "Gimbal bearing cap " ~ sid, DARK);
+            // floor relief under the pitch-motor sweep (roll +-0.35 brings its rear-bottom edge within 1 mm of the floor)
+            mkBox(context, id + ("frl" ~ sid), s * 8, s * 30, -14, 34, fl - 1.5, fl + 1);
+            subtr(context, id + ("frlC" ~ sid), torso, bq(id + ("frl" ~ sid)));
             // leg-harness pass through the mid bulkhead
-            mkBox(context, id + ("cs" ~ sid), s * 46, s * 56, -24, -19, hz + 26, hz + 34);
+            mkBox(context, id + ("cs" ~ sid), s * 48, s * 56, -24, -19, hz + 26, hz + 34);
             subtr(context, id + ("csC" ~ sid), torso, bq(id + ("cs" ~ sid)));
             // gimbal 6800-2RS (10 x 19 x 5), reference
-            cyl(context, id + ("b6800" ~ sid), P(s * RX, 39, hz), P(s * RX, 44, hz), 9.5);
-            hole(context, id + ("b6800h" ~ sid), bq(id + ("b6800" ~ sid)), "y", s * RX, hz, 38, 45, 10);
+            cyl(context, id + ("b6800" ~ sid), P(rx, 39, hz), P(rx, 44, hz), 9.5);
+            hole(context, id + ("b6800h" ~ sid), bq(id + ("b6800" ~ sid)), "y", rx, hz, 38, 45, 10);
             tagPart(context, bq(id + ("b6800" ~ sid)), "Bearing 6800-2RS hip gimbal " ~ sid, STEEL);
         }
         tagPart(context, torso, "Torso shell", WHITE);
@@ -472,7 +572,9 @@ export const bdDroidRS05 = defineFeature(function(context is Context, id is Id, 
         for (var k = 0; k < 4; k += 1)
             hole(context, id + ("trh" ~ k), tray, "z", shelfPts[k][0], shelfPts[k][1], zT - 1, zB + 1, 3.4);
         mkBox(context, id + "wireN", -10, 10, BY1 + 1, BY1 + 7, zT - 1, zB + 1);    // battery leads pass-down
-        subtr(context, id + "trayC", tray, bq(id + "wireN"));
+        mkBox(context, id + "wireR", 44, 56, -62, -50, zT - 1, zB + 1);             // right leg harness up to the power board
+        mkBox(context, id + "wireL", -44, -56, -62, -50, zT - 1, zB + 1);           // left leg harness
+        subtr(context, id + "trayC", tray, qUnion([bq(id + "wireN"), bq(id + "wireR"), bq(id + "wireL")]));
         tagPart(context, tray, "Battery shelf", DARK);
 
         // ---- Makita XGT 40V max battery: BL4025 2.5 Ah (36 V nominal, 90 Wh, 118 x 77 x 65 mm, 0.71 kg), reference ----
@@ -488,7 +590,7 @@ export const bdDroidRS05 = defineFeature(function(context is Context, id is Id, 
         mkBox(context, id + "dockS", -27.5, 27.5, BY0 + 15, BY1 + 3, zD - 13, zD);            // rail slot the pack slides into
         subtr(context, id + "dockSC", bq(id + "dock"), bq(id + "dockS"));
         tagPart(context, bq(id + "dock"), "XGT battery dock adapter, 12 AWG leads (ref)", color(0.2, 0.2, 0.22));
-        mkBox(context, id + "dockC", -45, 45, BY0 + 12, BY1 + 6, zD + 3, tz1);
+        mkBox(context, id + "dockC", -45, 45, BY0 + 14, BY1 + 6, zD + 3, tz1);
         mkBox(context, id + "dockCg", 0, 46, 1, 11, tz1 - 4, tz1 + 1);                 // neck-cable groove to the side gap
         subtr(context, id + "dockCgC", bq(id + "dockC"), bq(id + "dockCg"));
         tagPart(context, bq(id + "dockC"), "Battery dock carrier", DARK);
@@ -502,15 +604,15 @@ export const bdDroidRS05 = defineFeature(function(context is Context, id is Id, 
         tagPart(context, bq(id + "nucleoParts"), "NUCLEO component envelope (ref)", color(0.1, 0.35, 0.15));
 
         // ---- Power / CAN board (reference), standing beside the battery on the right: DC-DCs + CAN transceiver ----
-        mkBox(context, id + "pcb", 53, 54.6, -60, 13, zB + 2, zB + 30);
+        mkBox(context, id + "pcb", 54, 55.6, -60, 13, zB + 2, zB + 30);
         for (var k = 0; k < 4; k += 1)
-            hole(context, id + ("pch" ~ k), bq(id + "pcb"), "x", pbPts[k][0], pbPts[k][1], 52, 56, 3.2);
+            hole(context, id + ("pch" ~ k), bq(id + "pcb"), "x", pbPts[k][0], pbPts[k][1], 53, 57, 3.2);
         tagPart(context, bq(id + "pcb"), "Power-CAN board (ref)", PCB);
-        mkBox(context, id + "dc12", 42.8, 53, -46.5, 4.3, zB + 3, zB + 28.4);
+        mkBox(context, id + "dc12", 43.8, 54, -46.5, 4.3, zB + 3, zB + 28.4);
         tagPart(context, bq(id + "dc12"), "DC-DC 36V-12V 30W 2x1in, 18-75V in, e.g. Mean Well SKMW30F-12 (ref)", DARK);
-        mkBox(context, id + "dc5", 44.5, 53, -59, -47.5, zB + 5, zB + 22.5);
+        mkBox(context, id + "dc5", 45.5, 54, -59, -47.5, zB + 5, zB + 22.5);
         tagPart(context, bq(id + "dc5"), "DC-DC 36V-5V 0.5A SIP, 9-72V in, e.g. RECOM R-78HB5.0-0.5 (ref)", DARK);
-        mkBox(context, id + "can", 50, 53, 5, 12, zB + 5, zB + 17);
+        mkBox(context, id + "can", 51, 54, 5, 12, zB + 5, zB + 17);
         tagPart(context, bq(id + "can"), "CAN transceiver TJA1051T-3 + 120R (ref)", DARK);
         mkBox(context, id + "fuse", -54, -43, -40, -12, zB + 2, zB + 13);
         tagPart(context, bq(id + "fuse"), "Inline mini blade fuse holder 20 A (ref)", color(0.6, 0.1, 0.1));
@@ -519,7 +621,7 @@ export const bdDroidRS05 = defineFeature(function(context is Context, id is Id, 
         mkBox(context, id + "lid", -TXN, TXN, TYB, TYF, tz1, tz1 + 4);
         try silent { opFillet(context, id + "lidF", { "entities" : qParallelEdges(qCreatedBy(id + "lid", EntityType.EDGE), Z_DIRECTION), "radius" : 8 * millimeter }); }
         const lid = bq(id + "lid");
-        for (var k = 0; k < 4; k += 1)
+        for (var k = 0; k < size(lidPts); k += 1)
             hole(context, id + ("lh" ~ k), lid, "z", lidPts[k][0], lidPts[k][1], tz1 - 1, tz1 + 5, 3.4);
         const collarPts = [[22, -27], [-22, -27], [22, 21], [-22, 21]];
         for (var k = 0; k < 4; k += 1)

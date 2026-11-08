@@ -1,16 +1,4 @@
 {
-  "extreme": {
-    "limits": {
-      "roll_max": 8.0
-    },
-    "why": "CoM 0.19 m above the axle (0.135 m on CAD/) and 4.6 kg: more roll in hard turns. Measured 5.2 deg nominal; limit 1.5x like the CAD/ limits"
-  },
-  "slalom": {
-    "limits": {
-      "roll_max": 3.9
-    },
-    "why": "taller, heavier robot as for extreme. Measured 2.6 deg nominal; limit 1.5x"
-  },
   "fall_fwd": {
     "push": [
       1.0,
@@ -58,8 +46,41 @@
   },
   "fast_turn": {
     "limits": {
-      "roll_max": 4.5
+      "roll_err": 4.8
     },
-    "why": "taller robot as for extreme (CoM 0.19 m above the axle). Measured 3.0-3.1 deg nominal at 6 kg; limit 1.5x"
+    "floors": {
+      "lean_max": 7.0
+    },
+    "why": "leans into the turn (wbc_carve): 9.4 deg at 1.4 m/s^2; roll vs the bank reference lags 3.2 deg on entry. Limit 1.5x, floor ~0.75x"
+  },
+  "extreme": {
+    "limits": {
+      "roll_err": 8.5
+    },
+    "floors": {
+      "lean_max": 13.0,
+      "fn_min": 8.0
+    },
+    "why": "wbc_carve: leans 17 deg, both wheels stay >=12.9 N; roll lags the bank reference 5.7 deg on entry. Limit 1.5x, floors ~0.65-0.75x"
+  },
+  "slalom": {
+    "limits": {
+      "roll_err": 7.5
+    },
+    "floors": {
+      "lean_max": 6.0
+    },
+    "why": "wbc_carve: lean reversals every 2 s (8 deg each way), roll lags 5 deg at each flip. Limit 1.5x, floor 0.75x"
+  },
+  "max_cmd": {
+    "limits": {
+      "roll_err": 11.5,
+      "yaw_rmse": 0.15
+    },
+    "floors": {
+      "lean_max": 16.0,
+      "fn_min": 6.0
+    },
+    "why": "known_fail on CAD/; the BD droid carves it (22 deg lean, yaw_rmse 0.091, wheels >=10 N). Limits 1.5x, floors ~0.6-0.75x"
   }
 }

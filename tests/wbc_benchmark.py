@@ -14,7 +14,10 @@ terrain roll offset), then prints metrics and checks them against limits.
 Exit code is non-zero if any scenario breaks its limits (unless --no-check).
 Scenarios marked `known_fail` are reported but never fail the run. A run counts
 as a fall when the base tilts past 60 deg or any non-wheel body touches the
-world; a safe-fall trigger in a normal scenario is a failure. `expect_fall`
+world; a safe-fall trigger in a normal scenario is a failure. Turning scenarios
+check the roll against the controller's bank reference (roll_err, the robot is
+meant to lean into turns), the lean actually reached (lean_max, a floor) and the
+lightest wheel load (fn_min, 20 ms average of the MuJoCo contact normal force). `expect_fall`
 scenarios (nominal mode only) instead require the safe fall to trigger before
 impact and bound the impact speed, post-fall travel and wheel speed.
 
@@ -81,8 +84,10 @@ class Scenario:
     wavy: bool = False
     push: Optional[tuple] = None          # (t0, t1, wrench[6] world frame on the base)
     limits: dict = field(default_factory=dict)
+    floors: dict = field(default_factory=dict)    # metrics that must reach at least this value
     known_fail: bool = False
     expect_fall: bool = False             # unrecoverable by design: checks the safe fall instead
+    requires: str = ""                    # model <custom> numeric that must be set (non-zero), else skipped
 
 
 # Limits sit ~1.5x above the C++ controller's measured values (2026-11).
@@ -103,16 +108,16 @@ SCENARIOS = [
     Scenario("drive_yaw_push", 5.0, v=step_at(0.5, 0.5), start=FLOOR,
              push=(2.0, 2.1, [0, 0, 0, 0, 0, 0.4]), limits=dict(heading_final=3.0)),
     Scenario("drive+turn", 6.0, v=step_at(0.5, 0.5), yaw=step_at(2.0, 1.05), start=FLOOR,
-             limits=dict(roll_max=3.0, yaw_rmse=0.03)),
+             limits=dict(roll_err=3.0, yaw_rmse=0.03)),
     Scenario("spin", 4.0, yaw=step_at(0.5, 1.4), start=FLOOR, limits=dict(yaw_rmse=0.03)),
     Scenario("crouch", 4.0, dh=step_at(1.0, -0.03), limits=dict(pitch_rms=3.5)),
     Scenario("ledge_drop", 5.0, v=step_at(0.5, 0.4), limits=dict(roll_max=5.0)),
     Scenario("wavy", 8.0, v=lambda t: 0.35, start=(X_LANE, -0.8, 0.0772), scene="wavy_scene.xml",
              wavy=True, limits=dict(roll_max=8.0, lane_max=0.25)),
     Scenario("turn_long", 12.0, v=step_at(0.5, 0.5), yaw=step_at(1.0, 1.0), start=FLOOR,
-             limits=dict(roll_max=3.0)),
+             limits=dict(roll_err=3.0)),
     Scenario("fast_turn", 8.0, v=step_at(0.5, 1.0), yaw=step_at(2.0, 1.4), start=FLOOR,
-             limits=dict(roll_max=3.0)),
+             limits=dict(roll_err=3.0)),
     Scenario("crouch_drive", 6.0, v=step_at(1.0, 0.6), dh=lambda t: -0.04 * min(1.0, t), start=FLOOR,
              limits=dict(v_rmse=0.1)),
     # deepest balancing crouch the model allows (clamped to its posture table), then drive crouched
@@ -120,12 +125,31 @@ SCENARIOS = [
              start=FLOOR, limits=dict(pitch_rms=3.5, v_rmse=0.1)),
     Scenario("stand_long", 15.0, start=FLOOR, limits=dict(pitch_rms=0.5, hiproll_max=0.05)),
     Scenario("extreme", 8.0, v=step_at(0.5, 1.5), yaw=step_at(3.0, 1.8), start=FLOOR,
-             limits=dict(roll_max=5.0)),
+             limits=dict(roll_err=5.0)),
     Scenario("slalom", 10.0, v=step_at(0.5, 0.8),
              yaw=lambda t: 1.5 * np.sign(np.sin(1.5 * t)) if t > 2.0 else 0.0, start=FLOOR,
-             limits=dict(roll_max=2.0)),
+             limits=dict(roll_err=2.0)),
     Scenario("max_cmd", 8.0, v=step_at(0.5, 2.0), yaw=step_at(3.0, 1.8), start=FLOOR,
              known_fail=True),
+    # Carving: hard turns at speed. A model with wbc_carve leans the whole robot into them
+    # (coordinated lean, both wheels equally loaded); without it the turn is capped at a_lat_max.
+    # Limits ~1.5x the BD droid's (CAD_bd/) measured values; floors ~0.75x.
+    Scenario("carve", 8.0, v=step_at(0.5, 1.5), yaw=step_at(2.0, 3.0), start=FLOOR,
+             limits=dict(roll_err=15.0), floors=dict(lean_max=20.0, fn_min=5.0), requires="wbc_carve"),
+    # lean reversals every ~2 s at 1.5 m/s
+    Scenario("carve_slalom", 10.0, v=step_at(0.5, 1.5),
+             yaw=lambda t: 2.5 * np.sign(np.sin(1.6 * (t - 2.0))) if t > 2.0 else 0.0, start=FLOOR,
+             limits=dict(roll_err=19.0, hiproll_max=0.34), floors=dict(lean_max=20.0, fn_min=5.0),
+             requires="wbc_carve"),
+    # out of a hard carve, straighten up and stop
+    Scenario("carve_exit", 9.0, v=lambda t: 1.5 if 0.5 < t < 5.5 else 0.0,
+             yaw=lambda t: 3.0 if 2.0 < t < 4.5 else 0.0, start=FLOOR,
+             limits=dict(roll_err=15.0, heading_final=95.0), floors=dict(lean_max=20.0, fn_min=5.0),
+             requires="wbc_carve"),
+    # carve deep in a crouch (the outer leg needs room to reach down)
+    Scenario("carve_crouch", 9.0, v=step_at(2.0, 1.2), yaw=step_at(3.5, 2.5),
+             dh=lambda t: -0.10 * min(1.0, t / 1.5), start=FLOOR,
+             limits=dict(roll_err=9.0), floors=dict(lean_max=15.0, fn_min=8.0), requires="wbc_carve"),
     # Safe fall (nominal mode only): pushes past what the balance layer can
     # recover. The controller must detect the fall before the body hits the
     # ground, then brake the wheels (no runaway on the ground). fall_wheel_max is
@@ -143,7 +167,7 @@ FALL_POST = 2.0     # s simulated after a fall in expect_fall scenarios
 
 def load_overrides(cad_dir, scen):
     """Per-model scenario overrides from <cad_dir>/bench_overrides.json:
-    {"<scenario>": {"limits": {...}, "push": [t0, t1, [wrench]], "why": "..."}}.
+    {"<scenario>": {"limits": {...}, "floors": {...}, "push": [t0, t1, [wrench]], "why": "..."}}.
     The limits and pushes above are calibrated on the original robot (CAD/).
     The handoff rule applies: override only for a physically different robot,
     with the reason written down; never to hide a fall."""
@@ -160,8 +184,9 @@ def load_overrides(cad_dir, scen):
         if sc.name in over:
             o = over[sc.name]
             sc = dataclasses.replace(sc, limits={**sc.limits, **o.get("limits", {})},
+                                     floors={**sc.floors, **o.get("floors", {})},
                                      push=tuple(o["push"]) if "push" in o else sc.push)
-            what = ", ".join(f"{k}={o[k]}" for k in ("limits", "push") if k in o)
+            what = ", ".join(f"{k}={o[k]}" for k in ("limits", "floors", "push") if k in o)
             print(f"[bench] {sc.name}: {what} from {os.path.basename(os.path.normpath(cad_dir))}/"
                   f"bench_overrides.json ({o.get('why', 'no reason given')})")
         out.append(sc)
@@ -341,6 +366,10 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
     safe_t = hit_t = hit_v = p_safe = None
     fall_travel = fall_wheel_max = 0.0
     wheel_dofs = [m.jnt_dofadr[j] for j in range(m.njnt) if "wheel" in m.joint(j).name]
+    wheel_bodies = [m.jnt_bodyid[j] for j in range(m.njnt) if "wheel" in m.joint(j).name]
+    f6 = np.zeros(6)
+    fn_avg = np.zeros(len(wheel_bodies))
+    a_fn = min(1.0, dt / 0.02)                     # 20 ms average of the wheel normal loads
     vel6 = np.zeros(6)
     t_end = sc.T
     while d.time < t_end - 0.5 * dt:
@@ -376,8 +405,17 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
         ts.append(time.perf_counter() - t0)
         d.ctrl[:] = act.apply(tau, d, dt) if act else tau
         mujoco.mj_step(m, d)
+        fn = np.zeros(len(wheel_bodies))
+        for i in range(d.ncon):
+            b1, b2 = m.geom_bodyid[d.contact.geom[i]]
+            for k, wb in enumerate(wheel_bodies):
+                if (b1 == wb and is_world[b2]) or (b2 == wb and is_world[b1]):
+                    mujoco.mj_contactForce(m, d, i, f6)
+                    fn[k] += f6[0]
+        fn_avg += a_fn * (fn - fn_avg)
         log.append((t, theta, roll, vfwd, vf, d.qvel[5], yf, *(d.qpos[roll_adr] if roll_adr else (0.0, 0.0)),
-                    math.remainder(heading - yaw0, 2 * math.pi), d.qpos[0]))
+                    math.remainder(heading - yaw0, 2 * math.pi), d.qpos[0], info.get("psi_ref", 0.0),
+                    fn_avg.min() if len(fn_avg) else 0.0))
         if hit_t is None:
             for i in range(d.ncon):
                 b1, b2 = m.geom_bodyid[d.contact.geom[i]]
@@ -406,6 +444,9 @@ def run(sc: Scenario, WBC, ctor_kw, cad_dir, pert=None):
         pitch_rms=math.degrees(np.sqrt(np.mean(th[late] ** 2))),
         pitch_max=math.degrees(np.abs(th).max()),
         roll_max=math.degrees(np.abs(ro).max()),
+        lean_max=math.degrees(np.abs(ro).max()),
+        roll_err=math.degrees(np.abs(ro - L[:, 11]).max()),
+        fn_min=float(L[late, 12].min()),
         v_rmse=float(np.sqrt(np.mean((L[:, 3] - L[:, 4])[late] ** 2))),
         yaw_rmse=float(np.sqrt(np.mean((L[:, 5] - L[:, 6])[late] ** 2))),
         hiproll_max=float(np.abs(L[:, 7:9]).max()),
@@ -434,6 +475,7 @@ def check(sc, r):
         if r["safe_fall"] is not None:
             bad.append(f"safe fall triggered at {r['safe_fall']:.2f}s")
     bad += [f"{k}={r[k]:.3g}>{v}" for k, v in sc.limits.items() if r[k] > v]
+    bad += [f"{k}={r[k]:.3g}<{v}" for k, v in sc.floors.items() if r[k] < v]
     return bad
 
 
@@ -521,6 +563,14 @@ def main():
     if only - {s.name for s in scen}:
         ap.error(f"unknown scenario(s): {sorted(only - {s.name for s in scen})}")
     scen = load_overrides(args.cad, scen)
+    m_req = mujoco.MjModel.from_xml_path(os.path.join(args.cad, "scene.xml"))
+    def has(name):
+        i = mujoco.mj_name2id(m_req, mujoco.mjtObj.mjOBJ_NUMERIC, name)
+        return i >= 0 and m_req.numeric_data[m_req.numeric_adr[i]] != 0
+    skipped = [s_.name for s_ in scen if s_.requires and not has(s_.requires)]
+    if skipped:
+        print(f"[bench] skipped (model lacks the feature they test): {', '.join(skipped)}")
+    scen = [s_ for s_ in scen if s_.name not in skipped]
 
     probe = None
     if hasattr(WBC, "backend") or "backend" in ctor_kw:
@@ -548,7 +598,8 @@ def main():
         print(f"{sc.name:<16} {verdict:<10} "
               f"fell={'%.2fs' % r['fell'] if r['fell'] is not None else 'no':<6} "
               f"pitch rms/max={r['pitch_rms']:4.2f}/{r['pitch_max']:4.1f}° "
-              f"roll_max={r['roll_max']:4.1f}° v_rmse={r['v_rmse']:.3f} "
+              f"roll_max={r['roll_max']:4.1f}° roll_err={r['roll_err']:4.1f}° fn_min={r['fn_min']:4.1f}N "
+              f"v_rmse={r['v_rmse']:.3f} "
               f"yaw_rmse={r['yaw_rmse']:.3f} heading_end={r['heading_final']:5.1f}° "
               f"hiproll={r['hiproll_max']:.2f} step={r['us_mean']:.0f}/{r['us_p99']:.0f}us"
               + (f"   [{'; '.join(bad)}]" if bad else ""), flush=True)

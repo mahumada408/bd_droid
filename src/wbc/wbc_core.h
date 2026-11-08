@@ -103,6 +103,9 @@ class WbcCore {
   int fall_mode = 0;
   bool sitting = false;
   double t_fall_cond = 0, t_upright = 0;
+  double psi_f = 0, a_lat_f = 0;
+  double hub_h_prev[2] = {0, 0};   // hub height over the contact (changes with camber on a crowned tyre)
+  bool have_hub_h = false;   // slewed bank reference, filtered lateral acceleration
   double x_prev[NX] = {0};
   bool have_x_prev = false;
 
